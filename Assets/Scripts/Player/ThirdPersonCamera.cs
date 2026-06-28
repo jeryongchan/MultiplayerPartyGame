@@ -3,35 +3,54 @@ using UnityEngine.InputSystem;
 
 namespace FriendSlop.Player
 {
-    // orbiting follow camera, mouse drives yaw/pitch around a target. throwaway for local testing.
+    // orbiting follow camera, mouse drives yaw/pitch around a target. owning player sets itself
+    // as the target on spawn via SetTarget.
     public class ThirdPersonCamera : MonoBehaviour
     {
         [Header("Target")]
-        [SerializeField] private Transform target;
-        [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1.5f, 0f);
+        [SerializeField]
+        private Transform target;
+
+        [SerializeField]
+        private Vector3 targetOffset = new Vector3(0f, 1.5f, 0f);
 
         [Header("Orbit")]
-        [SerializeField] private float distance = 6f;
-        [SerializeField] private float lookSensitivity = 0.15f;
-        [SerializeField] private float minPitch = -20f;
-        [SerializeField] private float maxPitch = 70f;
+        [SerializeField]
+        private float distance = 6f;
+
+        [SerializeField]
+        private float lookSensitivity = 0.15f;
+
+        [SerializeField]
+        private float minPitch = -20f;
+
+        [SerializeField]
+        private float maxPitch = 70f;
 
         private float _yaw;
         private float _pitch = 20f;
+
+        // sets the transform this camera orbits and follows, and locks the cursor
+        public void SetTarget(Transform newTarget)
+        {
+            target = newTarget;
+
+            // lock cursor only once we have a player to control, so the connection HUD stays clickable
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
 
         private void Start()
         {
             Vector3 angles = transform.eulerAngles;
             _yaw = angles.y;
             _pitch = angles.x;
-
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
         }
 
         private void LateUpdate()
         {
-            if (target == null) return;
+            if (target == null)
+                return;
 
             Mouse mouse = Mouse.current;
             if (mouse != null)
