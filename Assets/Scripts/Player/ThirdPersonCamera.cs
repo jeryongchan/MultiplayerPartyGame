@@ -39,6 +39,9 @@ namespace FriendSlop.Player
 
         [Header("Scope (right-click ADS)")]
         [SerializeField]
+        private CanvasGroup scopeGroup;
+
+        [SerializeField]
         private RawImage sniperOverlay; // round scope graphic, kept 1:1 by an AspectRatioFitter
 
         // full-screen black behind the scope graphic, fills the side bars left by the 1:1 circle on
@@ -112,18 +115,33 @@ namespace FriendSlop.Player
             float currentDistance = Mathf.Lerp(distance, 0f, _scopeBlend);
             _cam.fieldOfView = Mathf.Lerp(normalFov, scopeFov, _scopeBlend);
 
-            if (sniperOverlay != null)
+            if (scopeGroup != null)
             {
-                sniperOverlay.gameObject.SetActive(true);
-                Color c = sniperOverlay.color;
-                c.a = _scopeBlend;
-                sniperOverlay.color = c;
+                scopeGroup.gameObject.SetActive(true);
+                scopeGroup.alpha = _scopeBlend;
+            }
+            else
+            {
+                SetScopeAlpha(sniperOverlay, _scopeBlend);
+                SetScopeAlpha(scopeBlackBacking, _scopeBlend);
             }
 
             Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
             Vector3 focus = _eye != null ? _eye.position : target.position + targetOffset;
             transform.position = focus - rotation * Vector3.forward * currentDistance;
             transform.rotation = rotation;
+        }
+
+        // Drives a scope UI layer's alpha from the blend, enabling it on first use (it starts disabled
+        // so nothing shows before a player spawns).
+        private static void SetScopeAlpha(Graphic graphic, float alpha)
+        {
+            if (graphic == null)
+                return;
+            graphic.gameObject.SetActive(true);
+            Color c = graphic.color;
+            c.a = alpha;
+            graphic.color = c;
         }
     }
 }

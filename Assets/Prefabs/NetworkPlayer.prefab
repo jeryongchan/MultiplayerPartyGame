@@ -356,3 +356,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.NetworkShooter
   ShowTopMostFoldoutHeaderGroup: 1
   maxRange: 200
+  requireScopeToFire: 1
+  markerSize: 0.2
+  markerLifetime: 1
