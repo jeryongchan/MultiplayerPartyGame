@@ -59,6 +59,17 @@ namespace FriendSlop.Player
         [SerializeField]
         private float scopeBlendSpeed = 12f;
 
+        [Header("Recoil")]
+        // how fast accumulated recoil decays back to zero (units/sec of recoil-offset recovered).
+        // higher snaps back faster; the aim recovers along the same curve since it reads the camera.
+        [SerializeField]
+        private float recoilRecoverSpeed = 8f;
+
+        // live recoil offset added on top of look yaw/pitch, decayed toward zero every frame. pitch is
+        // negative-up (matches _pitch -= mouseUp), so a shot kicks the view up by adding a negative pitch.
+        private float _recoilPitch;
+        private float _recoilYaw;
+
         private Camera _cam;
         private Transform _eye; // first-person anchor on the player (the "Eye" child), if present
         private float _yaw;
@@ -76,6 +87,15 @@ namespace FriendSlop.Player
             // lock cursor only once we have a player to control, so the connection HUD stays clickable
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
+        }
+
+        // kick the view by adding to the recoil offset (which decays back over time). pitchUp is the
+        // upward kick in degrees (positive = up); yaw is the sideways kick (caller randomizes the sign).
+        // accumulates, so back-to-back shots stack before recovery catches up.
+        public void AddRecoil(float pitchUp, float yaw)
+        {
+            _recoilPitch -= pitchUp; // _pitch is negative-up, so up = subtract
+            _recoilYaw += yaw;
         }
 
         private void Start()
@@ -126,14 +146,19 @@ namespace FriendSlop.Player
                 SetScopeAlpha(scopeBlackBacking, _scopeBlend);
             }
 
-            Quaternion rotation = Quaternion.Euler(_pitch, _yaw, 0f);
+            // recoil rides on top of look angles, then decays toward zero. because the shooter reads aim
+            // from this camera's forward, the kick moves the actual shot direction too, so rapid fire
+            // walks off-target until it recovers.
+            Quaternion rotation = Quaternion.Euler(_pitch + _recoilPitch, _yaw + _recoilYaw, 0f);
+            _recoilPitch = Mathf.MoveTowards(_recoilPitch, 0f, recoilRecoverSpeed * Time.deltaTime);
+            _recoilYaw = Mathf.MoveTowards(_recoilYaw, 0f, recoilRecoverSpeed * Time.deltaTime);
             Vector3 focus = _eye != null ? _eye.position : target.position + targetOffset;
             transform.position = focus - rotation * Vector3.forward * currentDistance;
             transform.rotation = rotation;
         }
 
-        // Drives a scope UI layer's alpha from the blend, enabling it on first use (it starts disabled
-        // so nothing shows before a player spawns).
+        // drives a scope UI layer's alpha from the blend, enabling it on first use (it starts disabled
+        // so nothing shows before a player spawns)
         private static void SetScopeAlpha(Graphic graphic, float alpha)
         {
             if (graphic == null)
