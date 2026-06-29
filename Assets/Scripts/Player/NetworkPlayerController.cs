@@ -9,9 +9,6 @@ namespace FriendSlop.Player
     //   owner:   when authoritative state arrives, snap to it and replay buffered inputs newer than
     //            the server's tick, so we don't lose moves the server hasn't seen.
     //   remote:  non-owners interpolate between buffered snapshots (~interpolationDelay behind).
-    // Simulate() is the linchpin: owner and server must run identical deterministic math, or every
-    // server update looks like a misprediction and rubber-bands. reconcile here is a hard snap
-    // (correct but steppy at high ping); smooth blending comes later.
     [RequireComponent(typeof(CharacterController))]
     public class NetworkPlayerController : NetworkBehaviour
     {
@@ -45,31 +42,39 @@ namespace FriendSlop.Player
 
         private CharacterController _controller;
 
-        // owner render-interp: the two most recent predicted tick poses + the latest tick's time. the
-        // mesh is drawn Lerp(prev, curr, timeSinceTick / tickDt) each frame.
-        private Vector3 _prevPos, _currPos;
-        private Quaternion _prevRot, _currRot;
+        // visual render-interp (simulate path): the two most recent tick poses + the latest tick's time.
+        // the mesh is drawn Lerp(prev, curr, timeSinceTick / tickDt) each frame. used by the owner and
+        // the host's copy of a remote, not pure remotes (those use the _snap* snapshots).
+        private Vector3 _prevVisualPos,
+            _currVisualPos;
+        private Quaternion _prevVisualRot,
+            _currVisualRot;
         private float _lastTickTime;
 
         // authoritative state, server-write, read by everyone.
-        private readonly NetworkVariable<StatePayload> _serverState =
+        private readonly NetworkVariable<StatePayload> _authoritativeState =
             new NetworkVariable<StatePayload>(writePerm: NetworkVariableWritePermission.Server);
 
         // owner-side ring buffers, indexed by tick % BufferSize.
         private readonly InputPayload[] _inputBuffer = new InputPayload[BufferSize];
         private readonly StatePayload[] _stateBuffer = new StatePayload[BufferSize];
 
-        // mutable sim state the owner predicts forward; the server keeps its own copy in _serverState.
+        // mutable sim state the owner predicts forward; the server keeps its own copy in _authoritativeState.
         private float _verticalVelocity;
         private bool _jumpLatched;
         private int _currentTick;
 
-        // remote interp: keep the two most recent snapshots and render at (now - interpolationDelay)
-        // by lerping between them, ~one tick in the past so the "to" snapshot has arrived and we never
-        // extrapolate.
-        private StatePayload _snapFrom, _snapTo;
-        private float _snapFromTime, _snapToTime;
-        private int _snapCount;
+        // remote interp: keep the two most recent snapshots and render at (now - interpolationDelay) by
+        // lerping between them, ~one tick in the past so the "to" snapshot has arrived and we never
+        // extrapolate. a snapshot = an authoritative state + the local time it arrived.
+        private struct TimedSnapshot
+        {
+            public StatePayload State;
+            public float ArrivalTime;
+        }
+
+        private TimedSnapshot? _snapFrom;
+        private TimedSnapshot? _snapTo;
 
         private void Awake() => _controller = GetComponent<CharacterController>();
 
@@ -80,23 +85,16 @@ namespace FriendSlop.Player
         {
             if (IsServer)
             {
-                int id = (int)OwnerClientId;
-                float offset = ((id + 1) / 2) * 2f * (id % 2 == 0 ? 1f : -1f);
-                TeleportTo(new Vector3(offset, 1.1f, 0f));
-                _serverState.Value = new StatePayload
-                {
-                    Tick = 0,
-                    Position = transform.position,
-                    Rotation = transform.rotation,
-                    VerticalVelocity = 0f,
-                };
+                // PLACEHOLDER, spread player so they don't overlap
+                TeleportTo(DebugSpawnPosition((int)OwnerClientId));
+                _authoritativeState.Value = CaptureState(0);
             }
 
             if (IsOwner)
             {
                 // seed both interp poses to spawn so the mesh doesn't lerp in from the origin
-                _prevPos = _currPos = transform.position;
-                _prevRot = _currRot = transform.rotation;
+                _prevVisualPos = _currVisualPos = transform.position;
+                _prevVisualRot = _currVisualRot = transform.rotation;
                 _lastTickTime = Time.time;
 
                 var cam = Object.FindFirstObjectByType<ThirdPersonCamera>();
@@ -109,61 +107,84 @@ namespace FriendSlop.Player
             if (!IsOwner && !IsServer)
             {
                 _controller.enabled = false;
-                RecordSnapshot(_serverState.Value);
+                RecordSnapshot(_authoritativeState.Value);
             }
 
-            _serverState.OnValueChanged += OnServerStateChanged;
+            _authoritativeState.OnValueChanged += OnAuthoritativeStateChanged;
 
             NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
         }
 
         public override void OnNetworkDespawn()
         {
-            _serverState.OnValueChanged -= OnServerStateChanged;
+            _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
             if (NetworkManager != null && NetworkManager.NetworkTickSystem != null)
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
 
+        // runs every frame on every copy, smooths the mesh between tick updates
         private void Update()
         {
-            // pure remote (our copy of someone else): interpolate between received snapshots, which
-            // arrive delayed, so we render in the past between two of them.
-            if (!IsOwner && !IsServer)
+            // every copy steps at tick rate (choppy), so every copy interpolates. the split is whether
+            // this copy simulates: if so (owner predicts / server computes) we have fresh tick poses to
+            // interpolate between; if not (remote, only gets snapshots) we interpolate from delayed
+            // snapshots in the past.
+            bool iSimulateThis = IsOwner || IsServer;
+            if (!iSimulateThis)
             {
-                InterpolateRemote();
+                InterpolateTransformDelayed();
                 return;
             }
-
-            // host-only path, inert on a dedicated server: the host is the authority, so its copy of a
-            // remote advances at tick rate inside SubmitInputServerRpc. we still render-interpolate the
-            // mesh here like the owner does. on a dedicated server this branch never runs.
-            if (!IsOwner)
+            // only the owner reads the keyboard; the server's copy of a remote already got its input via
+            // RPC, so here it just renders.
+            if (IsOwner)
             {
-                RenderInterpolateVisual();
-                return;
+                // movement is in OwnerTick; jump is an edge event so latch it here
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.spaceKey.wasPressedThisFrame)
+                    _jumpLatched = true;
             }
-
-            var kb = UnityEngine.InputSystem.Keyboard.current;
-            if (kb != null && kb.spaceKey.wasPressedThisFrame)
-                _jumpLatched = true;
-
-            // temp reconcile test: press T to yank the transform to a fake position; the next
-            // authoritative state should snap us back.
-            if (kb != null && kb.tKey.wasPressedThisFrame)
-                TeleportTo(transform.position + new Vector3(5f, 0f, 0f));
-
-            RenderInterpolateVisual();
+            InterpolateTransform();
         }
 
-        // draw the mesh smoothly between the last two recorded tick poses. used by the owner and the
-        // host's copies of remotes; both advance the root at tick rate and want full-framerate motion.
-        private void RenderInterpolateVisual()
+        // smooths the visual child for a copy we simulate (owner, or host's copy of a remote), using our
+        // own two latest tick poses. the root steps at tick rate; this lerps the mesh to fill the gap.
+        private void InterpolateTransform()
         {
             if (visual == null)
                 return;
             float alpha = Mathf.Clamp01((Time.time - _lastTickTime) / TickDt);
-            visual.position = Vector3.Lerp(_prevPos, _currPos, alpha);
-            visual.rotation = Quaternion.Slerp(_prevRot, _currRot, alpha);
+            visual.position = Vector3.Lerp(_prevVisualPos, _currVisualPos, alpha);
+            visual.rotation = Quaternion.Slerp(_prevVisualRot, _currVisualRot, alpha);
+        }
+
+        // smooths the visual child for a pure remote, using two snapshots received over the network
+        // (delayed + jittery). we render slightly in the past (now - interpolationDelay) and lerp
+        // between them; rendering behind guarantees both ends have arrived, so we never extrapolate.
+        private void InterpolateTransformDelayed()
+        {
+            if (_snapFrom == null || _snapTo == null || visual == null)
+                return; // need two snapshots to lerp between, and a mesh to draw
+
+            TimedSnapshot from = _snapFrom.Value;
+            TimedSnapshot to = _snapTo.Value;
+            float renderTime = Time.time - interpolationDelay;
+            float span = to.ArrivalTime - from.ArrivalTime;
+            float t = span > 0f ? Mathf.Clamp01((renderTime - from.ArrivalTime) / span) : 1f;
+
+            visual.position = Vector3.Lerp(from.State.Position, to.State.Position, t);
+            visual.rotation = Quaternion.Slerp(from.State.Rotation, to.State.Rotation, t);
+        }
+
+        // roll the visual-interp poses forward: last tick's result becomes prev, the current transform
+        // becomes curr. called once per tick on the copies that simulate (owner + host).
+        private void RecordTickPose()
+        {
+            _prevVisualPos = _currVisualPos;
+            _prevVisualRot = _currVisualRot;
+            _currVisualPos = transform.position;
+            _currVisualRot = transform.rotation;
+            _lastTickTime = Time.time;
         }
 
         private void OnNetworkTick()
@@ -176,25 +197,20 @@ namespace FriendSlop.Player
         private void OwnerTick()
         {
             int tick = _currentTick;
-
             var input = new InputPayload
             {
                 Tick = tick,
                 MoveDir = CameraRelativeDirection(ReadMoveInput()),
                 Jump = _jumpLatched,
+                Scoped = ReadScoped(),
+                AimDir = CameraForward(),
             };
             _jumpLatched = false;
 
             // predict with the shared step. Simulate() leaves the controller at the resulting position,
             // so no extra ApplyState is needed (that would re-teleport).
             StatePayload predicted = Simulate(CaptureState(tick), input, TickDt);
-
-            // roll render-interp poses forward: last tick's result becomes prev, this one curr
-            _prevPos = _currPos;
-            _prevRot = _currRot;
-            _currPos = transform.position;
-            _currRot = transform.rotation;
-            _lastTickTime = Time.time;
+            RecordTickPose();
 
             // record this tick so we can replay it during reconcile
             _inputBuffer[tick % BufferSize] = input;
@@ -209,100 +225,56 @@ namespace FriendSlop.Player
         [Rpc(SendTo.Server)]
         private void SubmitInputServerRpc(InputPayload input)
         {
-            StatePayload next;
+            // host's own player: OwnerTick already simulated this tick and recorded its visual pose, so
+            // just publish what it produced. re-simulating would apply physics twice (double jump/gravity).
             if (IsOwner)
             {
-                // host-owner: OwnerTick already ran Simulate this tick, so just publish what it produced.
-                // re-simulating here would apply physics twice (double-speed jump/gravity).
-                next = _stateBuffer[input.Tick % BufferSize];
-            }
-            else
-            {
-                var prev = _serverState.Value;
-                next = Simulate(prev, input, TickDt);
-                ApplyState(next);
+                _authoritativeState.Value = _stateBuffer[input.Tick % BufferSize];
+                return;
             }
 
-            if (!IsOwner)
-            {
-                next.Tick = input.Tick;
-                next.Position = transform.position;
-                next.Rotation = transform.rotation;
-                next.VerticalVelocity = _verticalVelocity;
-            }
-            _serverState.Value = next;
-
-            // record tick poses so the host can render-interpolate this copy's mesh. non-owner copies
-            // only: the host's own player records its poses in OwnerTick; doing it here too would
-            // overwrite prev with curr and freeze the mesh.
-            if (!IsOwner)
-            {
-                _prevPos = _currPos;
-                _prevRot = _currRot;
-                _currPos = transform.position;
-                _currRot = transform.rotation;
-                _lastTickTime = Time.time;
-            }
+            // a client's input: simulate now to get the authoritative result, publish it, and record the
+            // visual pose so the host can render-interpolate this remote copy's mesh.
+            StatePayload nextState = Simulate(_authoritativeState.Value, input, TickDt);
+            nextState.Tick = input.Tick; // stamp with the input's tick so the owner can reconcile
+            _authoritativeState.Value = nextState;
+            RecordTickPose();
         }
 
-        // reconcile (owner) / follow (remote)
-        private void OnServerStateChanged(StatePayload _, StatePayload server)
+        // authoritative state arrived: owner reconciles, pure remote buffers it for interp
+        private void OnAuthoritativeStateChanged(StatePayload _, StatePayload authoritativeState)
         {
             if (IsServer)
                 return; // server is already the authority, nothing to reconcile
 
             if (IsOwner)
-                Reconcile(server);
+                Reconcile(authoritativeState);
             else
-                RecordSnapshot(server); // remote copy: buffer for interpolation in Update()
+                RecordSnapshot(authoritativeState); // remote copy: buffer for interpolation in Update()
         }
 
-        // new authoritative state for a remote: shift the latest into 'from', store the new one as
-        // 'to', each stamped with local arrival time.
-        private void RecordSnapshot(StatePayload server)
+        // pure remote: a new snapshot arrived. shift the latest into 'from' and store the new one as
+        // 'to', each stamped with local arrival time (consumed by InterpolateTransformDelayed).
+        private void RecordSnapshot(StatePayload authoritativeState)
         {
             _snapFrom = _snapTo;
-            _snapFromTime = _snapToTime;
-            _snapTo = server;
-            _snapToTime = Time.time;
-            if (_snapCount < 2)
-                _snapCount++;
+            _snapTo = new TimedSnapshot { State = authoritativeState, ArrivalTime = Time.time };
         }
 
-        // runs every render frame on a remote copy. render the mesh at (now - interpolationDelay) by
-        // lerping between the two snapshots, so there's always a snapshot on each side (no overshoot).
-        private void InterpolateRemote()
-        {
-            if (_snapCount == 0 || visual == null)
-                return;
-
-            if (_snapCount == 1)
-            {
-                visual.SetPositionAndRotation(_snapTo.Position, _snapTo.Rotation);
-                return;
-            }
-
-            float renderTime = Time.time - interpolationDelay;
-            float span = _snapToTime - _snapFromTime;
-            float t = span > 0f ? Mathf.Clamp01((renderTime - _snapFromTime) / span) : 1f;
-
-            visual.position = Vector3.Lerp(_snapFrom.Position, _snapTo.Position, t);
-            visual.rotation = Quaternion.Slerp(_snapFrom.Rotation, _snapTo.Rotation, t);
-        }
-
-        private void Reconcile(StatePayload server)
+        // currently a hard snap (correct but steppy at high ping)
+        private void Reconcile(StatePayload authoritativeState)
         {
             // how far off was our prediction for the tick the server just processed?
-            StatePayload predicted = _stateBuffer[server.Tick % BufferSize];
-            float error = Vector3.Distance(predicted.Position, server.Position);
+            StatePayload predicted = _stateBuffer[authoritativeState.Tick % BufferSize];
+            float error = Vector3.Distance(predicted.Position, authoritativeState.Position);
             if (error < reconcileThreshold)
                 return; // close enough, keep our smoother local prediction
 
             // snap to the authoritative state, then replay every input the server hasn't seen yet
-            ApplyState(server);
-            _stateBuffer[server.Tick % BufferSize] = server;
+            ApplyState(authoritativeState);
+            _stateBuffer[authoritativeState.Tick % BufferSize] = authoritativeState;
 
-            for (int t = server.Tick + 1; t < _currentTick; t++)
+            for (int t = authoritativeState.Tick + 1; t < _currentTick; t++)
             {
                 InputPayload input = _inputBuffer[t % BufferSize];
                 StatePayload replayed = Simulate(CaptureState(t), input, TickDt);
@@ -327,10 +299,15 @@ namespace FriendSlop.Player
             Vector3 velocity = input.MoveDir * moveSpeed + Vector3.up * _verticalVelocity;
             _controller.Move(velocity * dt);
 
+            // facing: scoped faces the aim direction (body points where you shoot, A/D strafe relative
+            // to it); hip faces the movement direction (turn-to-move). movement is camera-relative in
+            // both, only what the body turns toward changes.
+            Vector3 faceDir = input.Scoped ? input.AimDir : input.MoveDir;
+
             Quaternion rotation = transform.rotation;
-            if (input.MoveDir.sqrMagnitude > 0.001f)
+            if (faceDir.sqrMagnitude > 0.001f)
             {
-                Quaternion targetRot = Quaternion.LookRotation(input.MoveDir);
+                Quaternion targetRot = Quaternion.LookRotation(faceDir);
                 rotation = Quaternion.RotateTowards(transform.rotation, targetRot, turnSpeed * dt);
                 transform.rotation = rotation;
             }
@@ -344,7 +321,7 @@ namespace FriendSlop.Player
             };
         }
 
-        // snapshot the controller's current transform into a state at the given tick
+        // build a StatePayload from the controller's current transform, labeled with the given tick
         private StatePayload CaptureState(int tick) =>
             new StatePayload
             {
@@ -369,6 +346,14 @@ namespace FriendSlop.Player
             _controller.enabled = false;
             transform.position = position;
             _controller.enabled = wasEnabled;
+        }
+
+        // placeholder spawn: fan players out along x by client id so capsules don't overlap in testing.
+        // replace with real role-based spawn points.
+        private static Vector3 DebugSpawnPosition(int clientId)
+        {
+            float offset = ((clientId + 1) / 2) * 2f * (clientId % 2 == 0 ? 1f : -1f);
+            return new Vector3(offset, 1.1f, 0f);
         }
 
         private static Vector3 CameraRelativeDirection(Vector2 input)
@@ -399,17 +384,40 @@ namespace FriendSlop.Player
             return new Vector2(x, y);
         }
 
+        // scoped while right mouse is held; a level state read at tick time like WASD, not latched
+        private static bool ReadScoped()
+        {
+            var mouse = UnityEngine.InputSystem.Mouse.current;
+            return mouse != null && mouse.rightButton.isPressed;
+        }
+
+        // the camera's horizontal forward, the aim direction the body faces when scoped
+        private static Vector3 CameraForward()
+        {
+            Transform cam = Camera.main != null ? Camera.main.transform : null;
+            if (cam == null)
+                return Vector3.forward;
+            Vector3 forward = cam.forward;
+            forward.y = 0f;
+            return forward.normalized;
+        }
+
         private struct InputPayload : INetworkSerializable
         {
             public int Tick;
             public Vector3 MoveDir;
             public bool Jump;
+            public bool Scoped; // right mouse held: face the aim direction and strafe
+            public Vector3 AimDir; // camera's horizontal forward, the body faces this when scoped
 
+            // one method both serializes and deserializes (s decides direction), so field order matters
             public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
             {
                 s.SerializeValue(ref Tick);
                 s.SerializeValue(ref MoveDir);
                 s.SerializeValue(ref Jump);
+                s.SerializeValue(ref Scoped);
+                s.SerializeValue(ref AimDir);
             }
         }
 
@@ -430,3 +438,10 @@ namespace FriendSlop.Player
         }
     }
 }
+
+// with one host and one joiner there are four copies of the pair, and the (IsOwner, IsServer) flags
+// pick each one's behaviour:
+//   host-owner    (owner + server): predicts its own input, is the authority, renders via InterpolateTransform.
+//   server-remote (server only):    simulates the client's input, renders via InterpolateTransform.
+//   client-owner  (owner only):     predicts and reconciles against the server, renders via InterpolateTransform.
+//   pure remote   (neither):        only gets snapshots, renders via InterpolateTransformDelayed.
