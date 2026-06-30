@@ -1,3 +1,4 @@
+using FriendSlop.Crowd;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -46,15 +47,22 @@ namespace FriendSlop.Player
         // resolved on the owner at first fire; the scene's single follow camera that drives aim.
         private ThirdPersonCamera _ownerCamera;
 
-        // how far back the server is allowed to rewind for a shot. doubles as the cheat-guard window:
-        // shots referencing a tick older than this (or in the future) are rejected. keep it under
-        // HitboxHistory's historySeconds. peer-hosted, so keep it tight (~0.2s) to limit host advantage.
+        // master switch for server-side rewind. turn off to A/B test: with lag + a moving target, off
+        // makes shots miss behind the target (server raycasts the present), on makes them hit (server
+        // rewinds to where the shooter saw it). server-only effect; toggle it on the host's prefab.
+        [SerializeField]
+        private bool lagCompensation = true;
+
+        // upper bound on how far back the server will rewind, in seconds. caps the lag-comp window so a
+        // very high-latency (or spoofed) client can't make the server rewind arbitrarily far and shoot
+        // people who were long gone from a position. keep at or under HitboxHistory.historySeconds.
+        // Valve/Unity recommend ~0.25-0.5s; peer-hosted games keep it tight to limit host advantage.
         [SerializeField]
         private float maxRewindSeconds = 0.5f;
 
-        // how far in the past this client renders remote players (entity interpolation). the shooter saw
-        // remotes at (current server tick minus this), so the server must rewind to that tick, not the
-        // raw fire tick, otherwise lag comp over-favors the shooter. match NetworkPlayerController's value.
+        // how far in the past this client renders remote players (entity interpolation). the shooter was
+        // looking at remotes this far behind the server clock, so the rewind target is
+        // (serverTick - shooterRTT - interpolationDelay). match NetworkPlayerController's value.
         [SerializeField]
         private float interpolationDelay = 0.1f;
 
@@ -62,26 +70,13 @@ namespace FriendSlop.Player
         private float markerSize = 0.2f;
 
         [SerializeField]
-        private float markerLifetime = 1f;
+        private float markerLifetime = 5f;
 
-        // one shared material for all markers, so we don't leak a Material per shot or render pink
-        private static Material _markerMaterial;
-
-        // debug: draw a dot + cross at the exact screen centre (where the ray is cast from). compare it
-        // against the scope overlay's crosshair while scoped, if they don't line up the overlay cross
-        // is lying about where you're aiming.
-        private void OnGUI()
-        {
-            if (!IsOwner)
-                return;
-            float cx = Screen.width * 0.5f;
-            float cy = Screen.height * 0.5f;
-            var tex = Texture2D.whiteTexture;
-            GUI.color = Color.red;
-            GUI.DrawTexture(new Rect(cx - 1f, cy - 12f, 2f, 24f), tex); // vertical
-            GUI.DrawTexture(new Rect(cx - 12f, cy - 1f, 24f, 2f), tex); // horizontal
-            GUI.color = Color.white;
-        }
+        // shared materials for all markers (so we don't leak a Material per shot, or render pink).
+        // green = hit a player, red = hit anything else (wall/world).
+        private static Material _playerMarkerMaterial;
+        private static Material _npcMarkerMaterial;
+        private static Material _worldMarkerMaterial;
 
         private void Update()
         {
@@ -97,8 +92,7 @@ namespace FriendSlop.Player
             // right-click is awkward on the trackpad). both are edge events, the press frame only.
             var kb = UnityEngine.InputSystem.Keyboard.current;
             bool firePressed =
-                mouse.leftButton.wasPressedThisFrame
-                || (kb != null && kb.fKey.wasPressedThisFrame);
+                mouse.leftButton.wasPressedThisFrame || (kb != null && kb.fKey.wasPressedThisFrame);
             if (!firePressed)
                 return;
 
@@ -118,17 +112,6 @@ namespace FriendSlop.Player
 
             Ray aim = cam.ScreenPointToRay(new Vector3(Screen.width * 0.5f, Screen.height * 0.5f));
 
-            // DEBUG: compare Screen size vs camera pixel size + viewport rect. A mismatch (letterbox /
-            // partial viewport) means screen-centre ray != where the OnGUI cross is drawn.
-            Debug.Log($"[Shoot DBG] Screen {Screen.width}x{Screen.height} | cam.pixel {cam.pixelWidth}x{cam.pixelHeight} | cam.rect {cam.rect} | viewportPoint of ray {cam.ScreenToViewportPoint(new Vector3(Screen.width*0.5f, Screen.height*0.5f, 0))}");
-
-            // DEBUG: what does the CLIENT see this ray hit? Compare against the server's result to tell
-            // a position desync (client hits player, server hits wall) from a clean miss (both miss).
-            if (Physics.Raycast(aim.origin, aim.direction, out RaycastHit clientHit, maxRange))
-                Debug.Log($"[Shoot CLIENT] sees hit '{clientHit.collider.name}' at {clientHit.point}, dist {clientHit.distance:F2}");
-            else
-                Debug.Log("[Shoot CLIENT] sees nothing");
-
             // kick the camera (and thus aim) on the confirmed shot. randomize horizontal direction so
             // the muzzle climbs while drifting unpredictably left/right under rapid fire.
             if (_ownerCamera == null)
@@ -136,69 +119,136 @@ namespace FriendSlop.Player
             if (_ownerCamera != null)
                 _ownerCamera.AddRecoil(recoilPitch, Random.Range(-recoilYaw, recoilYaw));
 
-            // the tick the shooter was actually seeing remotes at: current shared server tick minus the
-            // interpolation delay (remotes render in the past). the server rewinds hitboxes to this tick.
-            int tickRate = NetworkManager != null ? (int)NetworkManager.NetworkConfig.TickRate : 30;
-            int renderTick = NetworkManager.ServerTime.Tick - Mathf.RoundToInt(interpolationDelay * tickRate);
-
-            SubmitShootServerRpc(aim.origin, aim.direction, renderTick);
+            // send only where we aimed. the server owns the when: it derives the rewind tick from its own
+            // clock and our measured latency, so we never send a tick from the client's (offset) clock.
+            SubmitShootServerRpc(aim.origin, aim.direction);
         }
 
-        // client to server: the raw shot plus the tick the client was rendering. the server rewinds all
-        // hitboxes to that tick, raycasts, then restores. the client declares where/when it aimed,
-        // never what it hit.
+        // client to server: only where the owner aimed. the server alone decides when to rewind to, then
+        // raycasts that historical world. the client never declares what it hit, nor a tick (which would
+        // be in the client's own offset clock).
         [Rpc(SendTo.Server)]
-        private void SubmitShootServerRpc(Vector3 origin, Vector3 direction, int renderTick)
+        private void SubmitShootServerRpc(Vector3 origin, Vector3 direction)
         {
-            // cheat guard: reject a shot referencing a future tick or one older than our rewind window
-            int serverTick = NetworkManager.ServerTime.Tick;
-            int tickRate = (int)NetworkManager.NetworkConfig.TickRate;
-            int maxBack = Mathf.CeilToInt(maxRewindSeconds * tickRate);
-            if (renderTick > serverTick || renderTick < serverTick - maxBack)
-            {
-                Debug.Log($"[Shoot] rejected renderTick {renderTick} (server {serverTick}, window {maxBack} ticks)");
+            if (!ResolveShot(origin, direction, out RaycastHit hit))
                 return;
+
+            HitKind kind = Classify(hit.collider, out NetworkObject player, out CrowdNpcHitbox npc);
+
+            switch (kind)
+            {
+                case HitKind.Player:
+                    Debug.Log($"[Shoot] client {OwnerClientId} hit client {player.OwnerClientId}");
+                    // TODO: criminal vs sniper scoring (+1 sniper on criminal hit) goes here.
+                    break;
+                case HitKind.Npc:
+                    Debug.Log($"[Shoot] client {OwnerClientId} hit an NPC (-0.5 penalty)");
+                    // TODO: apply -0.5 sniper-team penalty (GDD) once a score system exists.
+                    // replicate the kill by index (the shared identity) so every machine fades out its own
+                    // copy of the same pedestrian; the server's Npc instance is local-only.
+                    if (npc.Npc != null)
+                        NpcKilledRpc(npc.Npc.Index);
+                    break;
             }
 
-            // lag compensation: rewind every player's hitbox to where it was at the shooter's render tick,
-            // flush PhysX, raycast against that historical world, then restore the present. server-only.
-            var histories = FindObjectsByType<HitboxHistory>(FindObjectsSortMode.None);
+            // broadcast the authoritative hit point + surface normal + what was hit, so every rendering
+            // machine marks the same spot (the normal lifts the marker off the surface; the kind colours
+            // it: green = player, yellow = NPC, red = world/wall).
+            ShowHitMarkerRpc(hit.point, hit.normal, kind);
+        }
+
+        // server to all rendering machines: the NPC with this stream index was shot. each machine kills its
+        // own local copy (freeze + fade + despawn) through the deterministic crowd's shared index. like the
+        // hit marker, this replicates the event and lets every machine produce the visual locally.
+        [Rpc(SendTo.ClientsAndHost)]
+        private void NpcKilledRpc(int index) => CrowdManager.Instance?.KillNpc(index);
+
+        // what a shot landed on. the shooter resolves this server-side from the hit collider: a player has
+        // a NetworkObject in its parents; an NPC has a CrowdNpcHitbox; anything else is world/wall.
+        private enum HitKind
+        {
+            World,
+            Player,
+            Npc,
+        }
+
+        private HitKind Classify(Collider col, out NetworkObject player, out CrowdNpcHitbox npc)
+        {
+            player = col.GetComponentInParent<NetworkObject>();
+            if (player != null && player.OwnerClientId != OwnerClientId)
+            {
+                npc = null;
+                return HitKind.Player;
+            }
+
+            npc = col.GetComponentInParent<CrowdNpcHitbox>();
+            if (npc != null)
+            {
+                player = null;
+                return HitKind.Npc;
+            }
+
+            player = null;
+            npc = null;
+            return HitKind.World;
+        }
+
+        // the tick the server rewinds to for this shooter's shots = serverTick - (RTT/2 + interpDelay),
+        // clamped to the rewind window. the shooter saw remotes one network trip (RTT/2) plus the
+        // interpolation delay in the past; the shot's own trip to the server is already elapsed by the
+        // time we process it, so we don't add it again (using full RTT over-rewinds, making you aim
+        // behind a moving target). server-only.
+        private int CurrentRewindTick()
+        {
+            int tickRate = (int)NetworkManager.NetworkConfig.TickRate;
+            float rttSeconds =
+                NetworkManager.NetworkConfig.NetworkTransport.GetCurrentRtt(OwnerClientId) / 1000f;
+            int rewindTicks = Mathf.Clamp(
+                Mathf.RoundToInt((rttSeconds * 0.5f + interpolationDelay) * tickRate),
+                0,
+                Mathf.CeilToInt(maxRewindSeconds * tickRate)
+            );
+            return NetworkManager.ServerTime.Tick - rewindTicks;
+        }
+
+        // server-only core of a shot: optionally rewind all other players' hitboxes to the time the
+        // shooter was looking at, raycast that world, then restore the present. returns the hit (if any).
+        // all times come from the server's own clock, no client clock-offset bug.
+        private bool ResolveShot(Vector3 origin, Vector3 direction, out RaycastHit hit)
+        {
+            int rewindTick = CurrentRewindTick();
+
+            // rewind every other player's hitbox to that tick (the shooter's own isn't a valid target and
+            // its present position is irrelevant to a camera-origin ray), flush PhysX, raycast, restore.
+            // when lagCompensation is off, we skip the rewind and raycast the present world (the bug we fix).
+            var histories = lagCompensation
+                ? FindObjectsByType<HitboxHistory>(FindObjectsSortMode.None)
+                : System.Array.Empty<HitboxHistory>();
             foreach (var h in histories)
-                h.Rewind(renderTick);
+                if (h.OwnerClientId != OwnerClientId)
+                    h.Rewind(rewindTick);
             Physics.SyncTransforms(); // push the moved colliders into PhysX before querying.
 
-            bool hitSomething = Physics.Raycast(origin, direction, out RaycastHit hit, maxRange, shootableMask);
+            bool hitSomething = Physics.Raycast(
+                origin,
+                direction,
+                out hit,
+                maxRange,
+                shootableMask
+            );
 
             foreach (var h in histories)
                 h.Restore();
             Physics.SyncTransforms(); // restore PhysX to the present world.
 
-            if (!hitSomething)
-            {
-                Debug.DrawRay(origin, direction * maxRange, Color.yellow, 2f); // missed everything
-                return;
-            }
-
-            // DEBUG: draw the ray to the hit, and log what it actually struck (at the rewound position).
-            // view in Scene window with Gizmos on while in Play mode (red = the shot).
-            Debug.DrawLine(origin, hit.point, Color.red, 2f);
-            Debug.Log($"[Shoot] renderTick {renderTick} | ray hit '{hit.collider.name}' at {hit.point}, dist {hit.distance:F2}");
-
-            // resolve the hit to a networked player, ignoring world geometry / non-networked colliders
-            var target = hit.collider.GetComponentInParent<NetworkObject>();
-            if (target != null && target.OwnerClientId != OwnerClientId)
-                Debug.Log($"[Shoot] client {OwnerClientId} hit client {target.OwnerClientId}");
-
-            // broadcast the authoritative hit point and surface normal so every machine marks the same
-            // spot; the normal lifts the marker off the surface instead of burying it in the collider
-            ShowHitMarkerRpc(hit.point, hit.normal);
+            return hitSomething;
         }
 
         // server to all machines: spawn a short-lived local marker at the hit point. it's a plain local
         // GameObject, not networked, so each machine makes its own (the usual pattern for cosmetic
         // effects: replicate the event, spawn the visual locally).
         [Rpc(SendTo.ClientsAndHost)]
-        private void ShowHitMarkerRpc(Vector3 point, Vector3 normal)
+        private void ShowHitMarkerRpc(Vector3 point, Vector3 normal, HitKind kind)
         {
             GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             // strip the collider immediately (DestroyImmediate, not Destroy): CreatePrimitive adds a
@@ -211,18 +261,29 @@ namespace FriendSlop.Player
             // than half-buried inside it (otherwise the target's opaque mesh hides it).
             marker.transform.position = point + normal * (markerSize * 0.5f);
             marker.transform.localScale = Vector3.one * markerSize;
-            marker.GetComponent<Renderer>().sharedMaterial = MarkerMaterial();
+            marker.GetComponent<Renderer>().sharedMaterial = MarkerMaterial(kind);
             Destroy(marker, markerLifetime);
         }
 
-        private static Material MarkerMaterial()
+        // green = player, yellow = NPC, red = world/wall. each colour is one shared, lazily-created material.
+        private static Material MarkerMaterial(HitKind kind)
         {
-            if (_markerMaterial == null)
-                _markerMaterial = new Material(Shader.Find("Universal Render Pipeline/Unlit"))
+            ref Material slot = ref kind == HitKind.Player
+                ? ref _playerMarkerMaterial
+                : ref kind == HitKind.Npc
+                    ? ref _npcMarkerMaterial
+                    : ref _worldMarkerMaterial;
+            if (slot == null)
+            {
+                Color c = kind switch
                 {
-                    color = Color.red,
+                    HitKind.Player => Color.green,
+                    HitKind.Npc => Color.yellow,
+                    _ => Color.red,
                 };
-            return _markerMaterial;
+                slot = new Material(Shader.Find("Universal Render Pipeline/Unlit")) { color = c };
+            }
+            return slot;
         }
     }
 }

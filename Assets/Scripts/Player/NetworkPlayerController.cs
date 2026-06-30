@@ -64,9 +64,14 @@ namespace FriendSlop.Player
         private bool _jumpLatched;
         private int _currentTick;
 
-        // remote interp: keep the two most recent snapshots and render at (now - interpolationDelay) by
-        // lerping between them, ~one tick in the past so the "to" snapshot has arrived and we never
-        // extrapolate. a snapshot = an authoritative state + the local time it arrived.
+        // optional test hook: when set (e.g. by AutoStrafe), this raw move input replaces WASD on the
+        // owner. stays null in normal play. lets a test drive movement through the real input path.
+        public Vector2? MoveInputOverride { get; set; }
+
+        // remote entity-interpolation: keep the two most recent snapshots. each frame, render the
+        // mesh at (now - interpolationDelay) by lerping between them, ~one tick in the past, so
+        // the "to" snapshot has already arrived and we never extrapolate. a snapshot = an authoritative
+        // state plus the local time it arrived (needed for the time-based lerp).
         private struct TimedSnapshot
         {
             public StatePayload State;
@@ -197,10 +202,11 @@ namespace FriendSlop.Player
         private void OwnerTick()
         {
             int tick = _currentTick;
+            Vector2 rawMove = MoveInputOverride ?? ReadMoveInput();
             var input = new InputPayload
             {
                 Tick = tick,
-                MoveDir = CameraRelativeDirection(ReadMoveInput()),
+                MoveDir = CameraRelativeDirection(rawMove),
                 Jump = _jumpLatched,
                 Scoped = ReadScoped(),
                 AimDir = CameraForward(),

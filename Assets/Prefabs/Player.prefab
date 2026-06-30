@@ -223,8 +223,8 @@ GameObject:
   m_Component:
   - component: {fileID: 3260295177873521564}
   - component: {fileID: 4708107627295818809}
-  m_Layer: 0
-  m_Name: HitCollider
+  m_Layer: 7
+  m_Name: Hitbox
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -281,8 +281,10 @@ GameObject:
   - component: {fileID: 4081783493309899832}
   - component: {fileID: 7401428338358960647}
   - component: {fileID: 1069966132034548798}
-  m_Layer: 2
-  m_Name: NetworkPlayer
+  - component: {fileID: 8579882744500487552}
+  - component: {fileID: 4441211071126545624}
+  m_Layer: 6
+  m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -342,7 +344,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4262671144
+  GlobalObjectIdHash: 1255344153
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -369,7 +371,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.NetworkPlayerController
   ShowTopMostFoldoutHeaderGroup: 1
-  moveSpeed: 10
+  moveSpeed: 2.5
   gravity: -20
   turnSpeed: 720
   jumpHeight: 1.5
@@ -394,5 +396,41 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 4294967295
   requireScopeToFire: 1
+  fireCooldown: 0
+  recoilPitch: 2.5
+  recoilYaw: 0.6
+  lagCompensation: 1
+  maxRewindSeconds: 0.5
+  interpolationDelay: 0.1
   markerSize: 0.2
   markerLifetime: 1
+--- !u!114 &8579882744500487552
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cc2e1a840d086c844b9d9376f4a63c48, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.HitboxHistory
+  ShowTopMostFoldoutHeaderGroup: 1
+  hitbox: {fileID: 3260295177873521564}
+  historySeconds: 0.5
+--- !u!114 &4441211071126545624
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d94841de4bb6a6a4082ec607e0a00785, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.AutoStrafe
+  ShowTopMostFoldoutHeaderGroup: 1
+  halfPeriod: 0.8
+  toggleKey: 21
