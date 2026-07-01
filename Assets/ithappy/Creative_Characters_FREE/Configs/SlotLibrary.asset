@@ -1,0 +1,105 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85665ee16006470abfc2be8500875ede, type: 3}
+  m_Name: SlotLibrary
+  m_EditorClassIdentifier: 
+  FullBodyCostumes:
+  - Slots:
+    - Type: 9
+      GameObject: {fileID: 919132149155446097, guid: 8999864be5384636a74444be0ec12077, type: 3}
+    - Type: 7
+      GameObject: {fileID: 919132149155446097, guid: 54dedaa70a7f42fea35daa8e34373233, type: 3}
+  Slots:
+  - Type: 1
+    Groups:
+    - Type: 0
+      Variants:
+      - {fileID: 919132149155446097, guid: 39ca3f5f903246e79dac11707013e4e8, type: 3}
+  - Type: 2
+    Groups:
+    - Type: 3
+      Variants:
+      - {fileID: 919132149155446097, guid: 2fe4b0e4b60c489c9b9e8c9ba491c82f, type: 3}
+      - {fileID: 919132149155446097, guid: f54f7c627ffd47c493e3dc059530089b, type: 3}
+      - {fileID: 919132149155446097, guid: 3469b524b3cb4a2e98832a439835f74f, type: 3}
+  - Type: 9
+    Groups:
+    - Type: 11
+      Variants:
+      - {fileID: 919132149155446097, guid: 32ac0b2c99b2435cb665dd1ece70b6ab, type: 3}
+    - Type: 12
+      Variants:
+      - {fileID: 919132149155446097, guid: 7bd2259758164610a2b85b19f7a0c2a5, type: 3}
+      - {fileID: 919132149155446097, guid: ec43f29a8b8d4f6b895e2518035c2e2e, type: 3}
+      - {fileID: 919132149155446097, guid: fb022c26355942c3a153661fe453b3a6, type: 3}
+    - Type: 10
+      Variants:
+      - {fileID: 919132149155446097, guid: 72ebb9ef8d014c9a9ce77d133d3f0d1e, type: 3}
+  - Type: 10
+    Groups:
+    - Type: 13
+      Variants:
+      - {fileID: 919132149155446097, guid: edb7369940854ad1bd9cef9adb83ab37, type: 3}
+      - {fileID: 919132149155446097, guid: 3759908ff23c45529985ee7622fd270d, type: 3}
+    - Type: 15
+      Variants:
+      - {fileID: 919132149155446097, guid: 32b70401d2674966b252c19094cc8e32, type: 3}
+  - Type: 0
+    Groups:
+    - Type: 2
+      Variants:
+      - {fileID: 919132149155446097, guid: a2c37b4540c64dca9b853d2f8424e153, type: 3}
+      - {fileID: 919132149155446097, guid: b7485eab03f4492ba1b917ef542e03cc, type: 3}
+      - {fileID: 919132149155446097, guid: 7f83d94aaf054ebaa69b583603f1ffba, type: 3}
+      - {fileID: 919132149155446097, guid: 841939df083440b08890b6456d9acfca, type: 3}
+      - {fileID: 919132149155446097, guid: 3376c80d08014cc595b86677a16d0ef3, type: 3}
+  - Type: 4
+    Groups:
+    - Type: 4
+      Variants:
+      - {fileID: 919132149155446097, guid: 74e90d5f69284bc89b300e219622c558, type: 3}
+      - {fileID: 919132149155446097, guid: 031b9791be8a4424820a6d57f00ec252, type: 3}
+  - Type: 5
+    Groups:
+    - Type: 5
+      Variants:
+      - {fileID: 919132149155446097, guid: 6e6a82e0c21a4286a4fffbda80c083ce, type: 3}
+      - {fileID: 919132149155446097, guid: a16f866300a64599b683c7d9a881d94b, type: 3}
+  - Type: 6
+    Groups:
+    - Type: 6
+      Variants:
+      - {fileID: 919132149155446097, guid: cd46cdfa74f74f319fbedcf83332655a, type: 3}
+      - {fileID: 919132149155446097, guid: ce516e9da79f4561a3fef90438e94d18, type: 3}
+    - Type: 7
+      Variants:
+      - {fileID: 919132149155446097, guid: 2b3da96c4e704a238bb87eab9c144a69, type: 3}
+  - Type: 7
+    Groups:
+    - Type: 8
+      Variants:
+      - {fileID: 919132149155446097, guid: dd126cd2cc8742438343f03208de04e4, type: 3}
+    - Type: 9
+      Variants:
+      - {fileID: 919132149155446097, guid: 50fa454bad2243cf8984fe2cc6702c84, type: 3}
+      - {fileID: 919132149155446097, guid: 13c9767009ef455cb2eb3ce20d326201, type: 3}
+      - {fileID: 919132149155446097, guid: d3a55dfc849142e298574ed03209fd44, type: 3}
+  - Type: 11
+    Groups:
+    - Type: 14
+      Variants:
+      - {fileID: 919132149155446097, guid: fab4d5a6a74c437591b388ecc20b0667, type: 3}
+      - {fileID: 919132149155446097, guid: 4bba9ab16b624951a701fdb3d42c0d29, type: 3}
+      - {fileID: 919132149155446097, guid: b724463617f448db8e211f0873040421, type: 3}
+    - Type: 16
+      Variants:
+      - {fileID: 919132149155446097, guid: cb2b769b6d1947c3b54838dae8433793, type: 3}

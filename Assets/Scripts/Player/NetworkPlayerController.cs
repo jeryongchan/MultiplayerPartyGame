@@ -55,6 +55,13 @@ namespace FriendSlop.Player
         private readonly NetworkVariable<StatePayload> _authoritativeState =
             new NetworkVariable<StatePayload>(writePerm: NetworkVariableWritePermission.Server);
 
+        // this player's role, written by the server (from RoleRegistry) and readable on every copy.
+        // composition over inheritance: role is data, not a subclass; ability components (NetworkShooter,
+        // future WitnessBeam / CriminalPoses) gate themselves on this instead of a SniperController : Player
+        // tree. owner reads it to gate input locally; server reads it to enforce authoritatively.
+        public readonly NetworkVariable<PlayerRole> Role =
+            new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
+
         // owner-side ring buffers, indexed by tick % BufferSize.
         private readonly InputPayload[] _inputBuffer = new InputPayload[BufferSize];
         private readonly StatePayload[] _stateBuffer = new StatePayload[BufferSize];
@@ -90,8 +97,14 @@ namespace FriendSlop.Player
         {
             if (IsServer)
             {
-                // PLACEHOLDER, spread player so they don't overlap
-                TeleportTo(DebugSpawnPosition((int)OwnerClientId));
+                var role = RoleRegistry.Instance != null
+                    ? RoleRegistry.Instance.GetRole(OwnerClientId)
+                    : PlayerRole.Sniper;
+                Role.Value = role;
+                var spawnPos = SpawnPointManager.Instance != null
+                    ? SpawnPointManager.Instance.GetSpawnPoint(role)
+                    : DebugSpawnPosition((int)OwnerClientId);
+                TeleportTo(spawnPos);
                 _authoritativeState.Value = CaptureState(0);
             }
 
@@ -346,6 +359,23 @@ namespace FriendSlop.Player
             transform.rotation = state.Rotation;
         }
 
+        // server-only. called by RoleRegistry.SetRoleRpc when a client (re)picks a role (approach B).
+        // moves the player to the new role's spawn point and republishes authoritative state so owner
+        // and remote copies both follow. under a real lobby (approach A) role is set before spawn, so
+        // this re-teleport never fires, OnNetworkSpawn places the player correctly the first time.
+        public void RespawnForRole(PlayerRole role)
+        {
+            if (!IsServer)
+                return;
+
+            Role.Value = role;
+            var spawnPos = SpawnPointManager.Instance != null
+                ? SpawnPointManager.Instance.GetSpawnPoint(role)
+                : DebugSpawnPosition((int)OwnerClientId);
+            TeleportTo(spawnPos);
+            _authoritativeState.Value = CaptureState(_authoritativeState.Value.Tick);
+        }
+
         private void TeleportTo(Vector3 position)
         {
             bool wasEnabled = _controller.enabled;
@@ -390,9 +420,13 @@ namespace FriendSlop.Player
             return new Vector2(x, y);
         }
 
-        // scoped while right mouse is held; a level state read at tick time like WASD, not latched
-        private static bool ReadScoped()
+        // scoped while right mouse is held (a held/level state, read at tick time like WASD, not latched).
+        // only Snipers scope; a Criminal's right-click must not flip the body into face-aim/strafe (that's
+        // a sniper-only stance). role is replicated, so the owner reading its own role here is valid.
+        private bool ReadScoped()
         {
+            if (Role.Value != PlayerRole.Sniper)
+                return false;
             var mouse = UnityEngine.InputSystem.Mouse.current;
             return mouse != null && mouse.rightButton.isPressed;
         }

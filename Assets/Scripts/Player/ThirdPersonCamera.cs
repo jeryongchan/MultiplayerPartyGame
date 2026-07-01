@@ -72,6 +72,7 @@ namespace FriendSlop.Player
 
         private Camera _cam;
         private Transform _eye; // first-person anchor on the player (the "Eye" child), if present
+        private NetworkPlayerController _player; // the followed player, for role-gating the scope
         private float _yaw;
         private float _pitch = 20f;
         private float _scopeBlend; // 0 = third-person, 1 = fully scoped first-person
@@ -83,6 +84,8 @@ namespace FriendSlop.Player
         {
             target = newTarget;
             _eye = newTarget != null ? newTarget.Find("Eye") : null; // FP anchor, optional
+            // the followed transform may be the visual mesh child, so search parents for the controller
+            _player = newTarget != null ? newTarget.GetComponentInParent<NetworkPlayerController>() : null;
 
             // lock cursor only once we have a player to control, so the connection HUD stays clickable
             Cursor.lockState = CursorLockMode.Locked;
@@ -114,7 +117,10 @@ namespace FriendSlop.Player
 
             // blend toward scoped (1) while right mouse is held, back to hip (0) when released. done
             // before the look so this frame's sensitivity already reflects how scoped we are.
-            bool scoping = mouse != null && mouse.rightButton.isPressed;
+            // only Snipers carry a scope; Criminals right-clicking does nothing (the scope overlay is a
+            // sniper tell, they shouldn't see it). Witness gets its own device later.
+            bool canScope = _player != null && _player.Role.Value == PlayerRole.Sniper;
+            bool scoping = canScope && mouse != null && mouse.rightButton.isPressed;
             _scopeBlend = Mathf.MoveTowards(
                 _scopeBlend,
                 scoping ? 1f : 0f,

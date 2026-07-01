@@ -47,7 +47,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Crowd.Npc
   waypoints: []
-  speed: 2.5
+  speed: 2
   turnSpeed: 360
   fadeOutSeconds: 1
 --- !u!1 &5098085920551145218

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 9cb0a0165a884f24a71626a9318ba732
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 304841
+  packageName: Creative Characters FREE - Animated Pack
+  packageVersion: 2.3
+  assetPath: Assets/ithappy/Creative_Characters_FREE/Scripts/Character_Controller/MovePlayerInput.cs
+  uploadId: 927690

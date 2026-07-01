@@ -78,10 +78,25 @@ namespace FriendSlop.Player
         private static Material _npcMarkerMaterial;
         private static Material _worldMarkerMaterial;
 
+        // sibling on the same player object; holds the replicated Role we gate firing on.
+        private NetworkPlayerController _controller;
+
+        private void Awake() => _controller = GetComponent<NetworkPlayerController>();
+
+        // only Snipers shoot (composition: ability gated on role data, not a subclass). readable on any
+        // copy via the replicated Role NetworkVariable, so the owner can gate input and the server can
+        // enforce it authoritatively. defaults to "can't shoot" if the controller is somehow missing.
+        private bool CanShoot => _controller != null && _controller.Role.Value == PlayerRole.Sniper;
+
         private void Update()
         {
             // only the owner fires, and only on the click frame (an edge event, like jump)
             if (!IsOwner)
+                return;
+
+            // owner-side role gate: a non-Sniper never even builds a shot (cheap, responsive). the server
+            // re-checks below so a modified client that bypasses this still can't fire.
+            if (!CanShoot)
                 return;
 
             var mouse = UnityEngine.InputSystem.Mouse.current;
@@ -130,6 +145,12 @@ namespace FriendSlop.Player
         [Rpc(SendTo.Server)]
         private void SubmitShootServerRpc(Vector3 origin, Vector3 direction)
         {
+            // authoritative role gate: the server is the source of truth. a hacked client that strips its
+            // owner-side check still lands here, where Role was written by the server from RoleRegistry,
+            // so a Criminal physically cannot fire (GDD: server-authoritative).
+            if (!CanShoot)
+                return;
+
             if (!ResolveShot(origin, direction, out RaycastHit hit))
                 return;
 
