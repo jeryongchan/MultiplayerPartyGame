@@ -1,3 +1,4 @@
+using FriendSlop.Characters;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -26,6 +27,13 @@ namespace FriendSlop.Crowd
 
         [SerializeField]
         private CrowdPath path;
+
+        [Header("Appearance")]
+        // shared appearance catalog, the same asset players use. each NPC's look is rolled deterministically
+        // from (seed, index) against it, so every machine paints the identical crowd with zero appearance
+        // bandwidth (matches the deterministic-crowd design: traits are pure functions of seed+index).
+        [SerializeField]
+        private CharacterAppearanceCatalog appearanceCatalog;
 
         // seconds between consecutive NPCs entering the path. lower = denser crowd (randomness to be
         // added later so density varies).
@@ -188,6 +196,20 @@ namespace FriendSlop.Crowd
 
             var npc = go.GetComponent<Npc>();
             npc.Initialize(index, _pathPoints, lateralOffset, forward, birthTime);
+
+            // paint this NPC's look, rolled deterministically from (seed, index) so every machine spawns the
+            // identical crowd. uses a separate salted RNG stream from the movement traits above, so appearance
+            // stays independent of direction/lateral choices (changing one never reshuffles the other).
+            if (appearanceCatalog != null)
+            {
+                var applier = go.GetComponentInChildren<CharacterAppearanceApplier>();
+                if (applier != null)
+                {
+                    applier.SetCatalog(appearanceCatalog);
+                    applier.Apply(CharacterAppearanceApplier.Roll(appearanceCatalog, AppearanceRngFor(index)));
+                }
+            }
+
             _active.Add(npc);
             _byIndex[index] = npc;
         }
@@ -199,6 +221,12 @@ namespace FriendSlop.Crowd
             new System.Random((int)(_seed.Value ^ (ulong)(index * 2654435761))); // Knuth mix
 
         private bool Forward(int index) => RngFor(index).NextDouble() < forwardFraction;
+
+        // a separate deterministic PRNG stream for appearance, salted differently from RngFor so a given
+        // NPC's look is independent of its movement traits (and vice versa). same (seed, index) gives the
+        // same look on every machine, at any join time; the whole point of the deterministic crowd.
+        private System.Random AppearanceRngFor(int index) =>
+            new System.Random((int)(_seed.Value ^ (ulong)(index * 40503) ^ 0x5A5A5A5AUL)); // distinct salt
 
         // the conjugate of the golden ratio, frac(1/phi). stepping by this around [0,1) is a
         // low-discrepancy sequence: consecutive indices land maximally far apart, so NPCs close in time

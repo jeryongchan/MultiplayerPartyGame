@@ -1,3 +1,4 @@
+using FriendSlop.Characters;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -38,6 +39,16 @@ namespace FriendSlop.Player
         [SerializeField]
         private Transform visual;
 
+        [Header("Appearance")]
+        // paints the modular character mesh from the replicated PlayerAppearance. lives on the Character child.
+        [SerializeField]
+        private CharacterAppearanceApplier appearanceApplier;
+
+        // shared lookup table mapping appearance indices to meshes. must be the same asset on every machine
+        // (it's a project asset, so it is). the server rolls indices against it; every client resolves them.
+        [SerializeField]
+        private CharacterAppearanceCatalog appearanceCatalog;
+
         private const int BufferSize = 256;
 
         private CharacterController _controller;
@@ -61,6 +72,12 @@ namespace FriendSlop.Player
         // tree. owner reads it to gate input locally; server reads it to enforce authoritatively.
         public readonly NetworkVariable<PlayerRole> Role =
             new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
+
+        // this player's randomized look, rolled once by the server on spawn and replicated to every copy as
+        // a small index struct (never mesh data). each machine paints its own character mesh from it via
+        // the shared catalog. server-write like Role; read and applied by all.
+        public readonly NetworkVariable<PlayerAppearance> Appearance =
+            new NetworkVariable<PlayerAppearance>(writePerm: NetworkVariableWritePermission.Server);
 
         // owner-side ring buffers, indexed by tick % BufferSize.
         private readonly InputPayload[] _inputBuffer = new InputPayload[BufferSize];
@@ -106,6 +123,14 @@ namespace FriendSlop.Player
                     : DebugSpawnPosition((int)OwnerClientId);
                 TeleportTo(spawnPos);
                 _authoritativeState.Value = CaptureState(0);
+
+                // roll a look once, server-side, seeded by client id so a given player is stable across a
+                // re-spawn this session. replicated via the NetworkVariable; every copy paints from it.
+                if (appearanceCatalog != null)
+                {
+                    var rng = new System.Random(unchecked((int)OwnerClientId * 73856093) ^ (int)System.DateTime.Now.Ticks);
+                    Appearance.Value = CharacterAppearanceApplier.Roll(appearanceCatalog, rng);
+                }
             }
 
             if (IsOwner)
@@ -130,12 +155,25 @@ namespace FriendSlop.Player
 
             _authoritativeState.OnValueChanged += OnAuthoritativeStateChanged;
 
+            // paint the character mesh from the replicated appearance, and repaint if it changes later
+            if (appearanceApplier != null)
+            {
+                if (appearanceCatalog != null)
+                    appearanceApplier.SetCatalog(appearanceCatalog);
+                Appearance.OnValueChanged += OnAppearanceChanged;
+                // late joiners (and the server itself) already have a value here, apply it now. it may be
+                // uninitialized (default) on the very first server frame; harmless, the OnValueChanged repaints.
+                if (Appearance.Value.IsValid)
+                    appearanceApplier.Apply(Appearance.Value);
+            }
+
             NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
         }
 
         public override void OnNetworkDespawn()
         {
             _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
+            Appearance.OnValueChanged -= OnAppearanceChanged;
             if (NetworkManager != null && NetworkManager.NetworkTickSystem != null)
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
@@ -272,8 +310,16 @@ namespace FriendSlop.Player
                 RecordSnapshot(authoritativeState); // remote copy: buffer for interpolation in Update()
         }
 
-        // pure remote: a new snapshot arrived. shift the latest into 'from' and store the new one as
-        // 'to', each stamped with local arrival time (consumed by InterpolateTransformDelayed).
+        // appearance replicated in (or changed): repaint the character mesh on this copy. runs on every
+        // machine, owner, server, and remotes, so all see the same look from the same index struct.
+        private void OnAppearanceChanged(PlayerAppearance _, PlayerAppearance appearance)
+        {
+            if (appearanceApplier != null)
+                appearanceApplier.Apply(appearance);
+        }
+
+        // pure remote: a new authoritative snapshot arrived. shift the latest into 'from' and store the
+        // new one as 'to', each stamped with local arrival time (consumed by InterpolateTransformDelayed).
         private void RecordSnapshot(StatePayload authoritativeState)
         {
             _snapFrom = _snapTo;

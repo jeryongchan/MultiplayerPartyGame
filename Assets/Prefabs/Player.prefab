@@ -255,7 +255,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 1255344153
+  GlobalObjectIdHash: 4262671144
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -289,6 +289,8 @@ MonoBehaviour:
   reconcileThreshold: 0.1
   interpolationDelay: 0.1
   visual: {fileID: 4868148605327696447}
+  appearanceApplier: {fileID: 5254977726614279072}
+  appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
 --- !u!114 &1069966132034548798
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -426,6 +428,10 @@ PrefabInstance:
       propertyPath: m_ConstrainProportionsScale
       value: 1
       objectReference: {fileID: 0}
+    - target: {fileID: 5035524270437951662, guid: bb0cd604d12965b48bc6104313af13d8, type: 3}
+      propertyPath: m_Enabled
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
@@ -510,10 +516,31 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1546993424152545495, guid: 1c0b082fa0af85643a6e97ec11f55854, type: 3}
       insertIndex: -1
       addedObject: {fileID: 3278546370633788222}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 6179065668305885291, guid: 1c0b082fa0af85643a6e97ec11f55854, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 5254977726614279072}
   m_SourcePrefab: {fileID: 100100000, guid: 1c0b082fa0af85643a6e97ec11f55854, type: 3}
 --- !u!4 &1417921638776846361 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 1546993424152545495, guid: 1c0b082fa0af85643a6e97ec11f55854, type: 3}
   m_PrefabInstance: {fileID: 492438708182085838}
   m_PrefabAsset: {fileID: 0}
+--- !u!1 &5986705684341156005 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 6179065668305885291, guid: 1c0b082fa0af85643a6e97ec11f55854, type: 3}
+  m_PrefabInstance: {fileID: 492438708182085838}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &5254977726614279072
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5986705684341156005}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bf6b6e5bd366585498946f0bf5c16e58, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Characters.CharacterAppearanceApplier
+  catalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}

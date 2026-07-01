@@ -854,7 +854,7 @@ MonoBehaviour:
   sniperOverlay: {fileID: 1086737474}
   scopeBlackBacking: {fileID: 0}
   normalFov: 60
-  scopeFov: 35
+  scopeFov: 25
   scopeBlendSpeed: 25
   recoilRecoverSpeed: 8
 --- !u!21 &351889895
@@ -3135,6 +3135,7 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   npcPrefab: {fileID: 2738893786859450636, guid: 99b394ef912b0064c9c6a64654bf8bef, type: 3}
   path: {fileID: 1997846485}
+  appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
   spawnInterval: 0.5
   sidewalkWidth: 6
   forwardFraction: 0.7
