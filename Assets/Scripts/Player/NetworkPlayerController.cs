@@ -115,6 +115,10 @@ namespace FriendSlop.Player
         private int _zoomLevel;
         private bool _zoomCyclePressed;
 
+        // owner-only: true once the follow camera has been found + targeted. until then the owner retries
+        // each frame (the camera may not exist yet when a client's player spawns during scene-sync).
+        private bool _cameraAttached;
+
         // owner-only: 0 = hip, 1 = scoped, 2 = scoped further in. drives ThirdPersonCamera's FOV.
         public int ZoomLevel => _zoomLevel;
 
@@ -214,9 +218,11 @@ namespace FriendSlop.Player
                 _prevVisualRot = _currVisualRot = transform.rotation;
                 _lastTickTime = Time.time;
 
-                var cam = Object.FindFirstObjectByType<ThirdPersonCamera>();
-                if (cam != null)
-                    cam.SetTarget(visual != null ? visual : transform); // follow the smoothed mesh
+                // attach the follow camera. on the host the GameScene camera already exists at spawn; on a
+                // client the player spawns during NGO scene-sync and the camera may not exist yet, so we may
+                // not find it here; TryAttachCamera() keeps retrying each frame in Update until it does
+                // (otherwise the client is left with a frozen, un-followed view).
+                TryAttachCamera();
             }
 
             // a pure remote copy never simulates, it only displays interpolated snapshots. disable the
@@ -249,6 +255,18 @@ namespace FriendSlop.Player
             NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
         }
 
+        // owner-only: find the scene's follow camera and point it at this player. sets _cameraAttached on
+        // success so the Update retry stops. safe to call repeatedly. the camera lives in the GameScene and
+        // may appear a frame or two after a client's player spawns, hence the retry.
+        private void TryAttachCamera()
+        {
+            var cam = Object.FindFirstObjectByType<ThirdPersonCamera>();
+            if (cam == null)
+                return;
+            cam.SetTarget(visual != null ? visual : transform); // follow the smoothed mesh
+            _cameraAttached = true;
+        }
+
         public override void OnNetworkDespawn()
         {
             _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
@@ -275,7 +293,11 @@ namespace FriendSlop.Player
             // RPC, so here it just renders.
             if (IsOwner)
             {
-                // movement is in OwnerTick; jump is an edge event so latch it here
+                // keep trying to grab the follow camera until we have it (see OnNetworkSpawn note)
+                if (!_cameraAttached)
+                    TryAttachCamera();
+
+                // movement is handled in OwnerTick; Jump is an edge event so it's latched here in Update
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null && kb.spaceKey.wasPressedThisFrame)
                     _jumpLatched = true;
