@@ -70,5 +70,48 @@ namespace FriendSlop.Player
         {
             return _roles.TryGetValue(clientId, out var role) ? role : PlayerRole.Sniper;
         }
+
+        // server-only. the match's role-assignment door (called by GameFlowManager each RoleAssign
+        // phase). composition split: this owns the "who plays what" decision and records it; the existing
+        // SetRoleRpc / RespawnForRole path owns applying it. team split per GDD: hunter team is 1 Witness
+        // plus (N-1)/2 Snipers, criminal team is the rest (gets the +1 when N is even). roundOffset
+        // rotates the shuffle so a given player cycles through roles across a session ("rotate teams and
+        // roles, play again"), not to keep friends together; party grouping is a separate lobby-layer
+        // concern and deliberately does not touch role assignment.
+        public void AssignRolesForRound(IReadOnlyList<ulong> clients, int roundOffset)
+        {
+            int n = clients.Count;
+            if (n == 0)
+                return;
+
+            // deterministic rotation: order clients by id, then rotate the start index by the round so the
+            // same player set produces a different role layout each round without needing shared RNG state
+            var ordered = new List<ulong>(clients);
+            ordered.Sort();
+
+            int snipers = (n - 1) / 2; // hunter team is 1 witness + (N-1)/2 snipers
+
+            for (int i = 0; i < n; i++)
+            {
+                ulong clientId = ordered[(i + roundOffset) % n];
+                PlayerRole role;
+                if (i == 0)
+                    role = PlayerRole.Witness; // exactly one witness (index 0 of the rotated order)
+                else if (i <= snipers)
+                    role = PlayerRole.Sniper;
+                else
+                    role = PlayerRole.Criminal; // remainder are criminals (+1 when N is even)
+
+                _roles[clientId] = role;
+
+                // apply it through the same path SetRoleRpc uses: re-teleport the live player object
+                if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
+                    && client.PlayerObject != null
+                    && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
+                {
+                    controller.RespawnForRole(role);
+                }
+            }
+        }
     }
 }

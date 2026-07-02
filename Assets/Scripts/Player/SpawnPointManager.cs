@@ -38,7 +38,8 @@ namespace FriendSlop.Player
         // game doesn't hard-crash; assign all 5 points before shipping.
         public Vector3 GetSpawnPoint(PlayerRole role)
         {
-            if (role == PlayerRole.Sniper)
+            // witness spawns with the hunters on the rooftop (it's a sniper + sketch duty for now)
+            if (role.IsHunter())
             {
                 var t = sniperPoints[_nextSniper % sniperPoints.Length];
                 _nextSniper++;

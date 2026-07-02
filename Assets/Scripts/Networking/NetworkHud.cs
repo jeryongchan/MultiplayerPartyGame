@@ -1,3 +1,4 @@
+using FriendSlop.Game;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -51,6 +52,20 @@ namespace FriendSlop.Networking
                 string mode = nm.IsHost ? "Host" : nm.IsServer ? "Server" : "Client";
                 GUILayout.Label($"Mode: {mode}");
                 GUILayout.Label($"Connected clients: {nm.ConnectedClientsList.Count}");
+
+                // host-only: start the match (Lobby -> RoleAssign). only shows while still in Lobby, so
+                // it disappears once the loop is running. the RPC is server-gated, so a client can't fire it.
+                var flow = GameFlowManager.Instance;
+                if (nm.IsServer && flow != null && flow.CurrentPhase.Value == GamePhase.Lobby)
+                {
+                    if (GUILayout.Button("Start Match"))
+                        flow.StartMatchRpc();
+                }
+                else if (flow != null)
+                {
+                    GUILayout.Label($"Phase: {flow.CurrentPhase.Value}");
+                }
+
                 if (GUILayout.Button("Shutdown")) nm.Shutdown();
             }
 

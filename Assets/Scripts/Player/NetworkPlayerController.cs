@@ -1,4 +1,5 @@
 using FriendSlop.Characters;
+using FriendSlop.Game;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -263,7 +264,7 @@ namespace FriendSlop.Player
                 // right-click cycles the zoom level (edge event, like Jump). only Snipers can scope,
                 // a Criminal's right-click stays a no-op, same gating ReadScoped() already enforced.
                 var mouse = UnityEngine.InputSystem.Mouse.current;
-                if (mouse != null && mouse.rightButton.wasPressedThisFrame && Role.Value == PlayerRole.Sniper)
+                if (mouse != null && mouse.rightButton.wasPressedThisFrame && Role.Value.IsHunter())
                     _zoomCyclePressed = true;
             }
             InterpolateTransform();
@@ -326,15 +327,22 @@ namespace FriendSlop.Player
             }
 
             int tick = _currentTick;
-            Vector2 rawMove = MoveInputOverride ?? ReadMoveInput();
+
+            // hard input-freeze during the reporter cutscene (SketchReveal): the owner sends empty
+            // movement so its own prediction and the server simulate the same still input, no reconcile
+            // fight, no desync. physics (gravity/grounding) still runs on a zero MoveDir, so nobody floats.
+            // note: sketch-phase containment is handled by scene geometry (invisible walls), not here.
+            bool frozen = GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen;
+
+            Vector2 rawMove = frozen ? Vector2.zero : (MoveInputOverride ?? ReadMoveInput());
             var input = new InputPayload
             {
                 Tick = tick,
                 MoveDir = CameraRelativeDirection(rawMove),
-                Jump = _jumpLatched,
-                Scoped = ReadScoped(),
+                Jump = !frozen && _jumpLatched,
+                Scoped = !frozen && ReadScoped(),
                 AimDir = CameraForward(),
-                Sprinting = ReadSprintInput(),
+                Sprinting = !frozen && ReadSprintInput(),
             };
             _jumpLatched = false;
 

@@ -1,4 +1,5 @@
 using FriendSlop.Crowd;
+using FriendSlop.Game;
 using Unity.Netcode;
 using UnityEngine;
 
@@ -83,10 +84,15 @@ namespace FriendSlop.Player
 
         private void Awake() => _controller = GetComponent<NetworkPlayerController>();
 
-        // only Snipers shoot (composition: ability gated on role data, not a subclass). readable on any
-        // copy via the replicated Role NetworkVariable, so the owner can gate input and the server can
-        // enforce it authoritatively. defaults to "can't shoot" if the controller is somehow missing.
-        private bool CanShoot => _controller != null && _controller.Role.Value == PlayerRole.Sniper;
+        // hunters shoot (Sniper + Witness for now), composition: ability gated on role data, not a
+        // subclass. readable on any copy via the replicated Role NetworkVariable, so the owner can gate
+        // input and the server can enforce it authoritatively. also gated to the Hunt phase: no firing
+        // during RoleAssign/Sketch/Reveal/Resolution. defaults to "can't shoot" if the controller is
+        // somehow missing. (server-side re-check in SubmitShootServerRpc makes this authoritative.)
+        private bool CanShoot =>
+            _controller != null
+            && _controller.Role.Value.IsHunter()
+            && (GameFlowManager.Instance == null || GameFlowManager.Instance.IsHunt);
 
         private void Update()
         {

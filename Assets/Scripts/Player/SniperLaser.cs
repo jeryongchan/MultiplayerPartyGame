@@ -65,7 +65,7 @@ namespace FriendSlop.Player
             if (!IsOwner || _controller == null)
                 return;
 
-            bool visible = _controller.Role.Value == PlayerRole.Sniper && _controller.IsScoped;
+            bool visible = _controller.Role.Value.IsHunter() && _controller.IsScoped;
             _visible.Value = visible;
             if (!visible)
                 return;

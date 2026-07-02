@@ -97,9 +97,21 @@ namespace FriendSlop.Player
             // the followed transform may be the visual mesh child, so search parents for the controller
             _player = newTarget != null ? newTarget.GetComponentInParent<NetworkPlayerController>() : null;
 
-            // lock cursor only once we have a player to control, so the connection HUD stays clickable
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            // cursor lock is now driven per-frame in LateUpdate (UpdateCursorLock) rather than latched
+            // here, so it can free up for the debug HUD / menus outside of active play and re-lock in Hunt.
+        }
+
+        // cursor is locked by default (so mouse-look works), and freed only while the player holds left
+        // Alt, the escape hatch for clicking the debug HUD (Host/Start/Shutdown IMGUI buttons) without
+        // the lock swallowing the click. no phase dependency: look works in every phase; you just hold
+        // Alt when you need the pointer.
+        private void UpdateCursorLock()
+        {
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            bool wantFree = kb != null && kb.leftAltKey.isPressed;
+
+            Cursor.lockState = wantFree ? CursorLockMode.None : CursorLockMode.Locked;
+            Cursor.visible = wantFree;
         }
 
         // kick the view by adding to the recoil offset (which decays back over time). pitchUp is the
@@ -123,7 +135,11 @@ namespace FriendSlop.Player
             if (target == null)
                 return;
 
-            Mouse mouse = Mouse.current;
+            UpdateCursorLock();
+
+            // only steer the view while the cursor is locked (actively playing). when it's free, menus,
+            // lobby, Alt held, moving the mouse to click must not drag the camera.
+            Mouse mouse = Cursor.lockState == CursorLockMode.Locked ? Mouse.current : null;
 
             // zoom level (0 = hip, 1 = scoped, 2 = scoped further) is an AWP-style toggle owned by
             // NetworkPlayerController; right-click cycles it there, this camera just reads the result.
