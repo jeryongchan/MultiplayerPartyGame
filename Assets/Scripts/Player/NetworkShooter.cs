@@ -168,11 +168,20 @@ namespace FriendSlop.Player
             {
                 case HitKind.Player:
                     Debug.Log($"[Shoot] client {OwnerClientId} hit client {player.OwnerClientId}");
-                    // TODO: criminal vs sniper scoring (+1 sniper on criminal hit) goes here.
+                    // a hit only scores/downs during Hunt, and only against a criminal who's still up
+                    // (hitting a fellow hunter, or anyone outside Hunt, does nothing but drop a marker)
+                    if (GameFlowManager.Instance != null && GameFlowManager.Instance.IsHunt
+                        && player.TryGetComponent(out NetworkPlayerController victim)
+                        && victim.Role.Value == PlayerRole.Criminal && victim.IsAlive.Value)
+                    {
+                        victim.SetAlive(false); // down them: hide mesh + hitbox, freeze their input
+                        ScoreManager.Instance?.RecordCriminalKill(OwnerClientId);
+                    }
                     break;
                 case HitKind.Npc:
-                    Debug.Log($"[Shoot] client {OwnerClientId} hit an NPC (-0.5 penalty)");
-                    // TODO: apply -0.5 sniper-team penalty (GDD) once a score system exists.
+                    Debug.Log($"[Shoot] client {OwnerClientId} hit an NPC (penalty)");
+                    if (GameFlowManager.Instance != null && GameFlowManager.Instance.IsHunt)
+                        ScoreManager.Instance?.RecordNpcHit(OwnerClientId);
                     // replicate the kill by index (the shared identity) so every machine fades out its own
                     // copy of the same pedestrian; the server's Npc instance is local-only.
                     if (npc.Npc != null)

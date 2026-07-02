@@ -94,6 +94,9 @@ namespace FriendSlop.Game
         {
             if (CurrentPhase.Value != GamePhase.Lobby)
                 return;
+            ScoreManager.Instance?.ResetMatch(); // fresh board for the new match.
+            RoleRegistry.Instance?.ResetTeams(); // re-split fixed teams for the new match.
+            _round = 0; // restart round rotation.
             EnterPhase(GamePhase.RoleAssign);
         }
 
@@ -133,8 +136,12 @@ namespace FriendSlop.Game
                     AssignRolesForRound();
                     break;
                 case GamePhase.Resolution:
-                    // TODO: tally the round score here once ScoreManager exists (GDD scoring rules)
-                    _round++; // advance so the next RoleAssign rotates roles
+                    // Hunt just ended: award every criminal who's still alive their survival points. kills
+                    // were already banked as they happened (NetworkShooter). then advance the round counter
+                    // so the next RoleAssign rotates roles.
+                    ScoreManager.Instance?.AwardSurvivors();
+                    ScoreManager.Instance?.DecideRoundWinner(); // publish the team verdict for the scoreboard
+                    _round++;
                     break;
             }
         }

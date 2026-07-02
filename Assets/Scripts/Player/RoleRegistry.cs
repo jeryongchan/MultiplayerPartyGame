@@ -34,6 +34,13 @@ namespace FriendSlop.Player
         // server-only. clients never touch this, they're told where to spawn via authoritative state.
         private readonly Dictionary<ulong, PlayerRole> _roles = new();
 
+        // fixed teams for the match, frozen once at the first RoleAssign (BuildTeams). membership does not
+        // change round-to-round; only which hunter is the Witness rotates within _hunters. cleared by
+        // ResetTeams at match start so a new match re-splits. (minimal: split is a simple size rule now;
+        // a real lobby will populate these instead.)
+        private readonly List<ulong> _hunters = new();
+        private readonly List<ulong> _criminals = new();
+
         private void Awake()
         {
             Instance = this;
@@ -71,46 +78,67 @@ namespace FriendSlop.Player
             return _roles.TryGetValue(clientId, out var role) ? role : PlayerRole.Sniper;
         }
 
-        // server-only. the match's role-assignment door (called by GameFlowManager each RoleAssign
-        // phase). composition split: this owns the "who plays what" decision and records it; the existing
-        // SetRoleRpc / RespawnForRole path owns applying it. team split per GDD: hunter team is 1 Witness
-        // plus (N-1)/2 Snipers, criminal team is the rest (gets the +1 when N is even). roundOffset
-        // rotates the shuffle so a given player cycles through roles across a session ("rotate teams and
-        // roles, play again"), not to keep friends together; party grouping is a separate lobby-layer
-        // concern and deliberately does not touch role assignment.
+        // server-only. the match's role-assignment door (called by GameFlowManager each RoleAssign phase).
+        // fixed teams: membership (hunter vs criminal) is frozen once at the first assignment and never
+        // crosses. each round only rotates which hunter is the Witness; the rest of the hunters are
+        // Snipers, and criminals stay criminals. roundOffset picks the Witness so the spotter role cycles
+        // among the hunters across rounds.
+        //
+        // composition split unchanged: this owns "who plays what"; SetRoleRpc / RespawnForRole applies it.
         public void AssignRolesForRound(IReadOnlyList<ulong> clients, int roundOffset)
         {
-            int n = clients.Count;
-            if (n == 0)
+            if (clients.Count == 0)
                 return;
 
-            // deterministic rotation: order clients by id, then rotate the start index by the round so the
-            // same player set produces a different role layout each round without needing shared RNG state
+            // freeze the teams the first time (or after a match reset). a real lobby will fill these instead.
+            if (_hunters.Count == 0 && _criminals.Count == 0)
+                BuildTeams(clients);
+
+            // rotate the Witness within the hunter team; every other hunter is a Sniper
+            int witnessIdx = _hunters.Count > 0 ? roundOffset % _hunters.Count : 0;
+            for (int i = 0; i < _hunters.Count; i++)
+                ApplyRole(_hunters[i], i == witnessIdx ? PlayerRole.Witness : PlayerRole.Sniper);
+
+            // criminals never change
+            foreach (var c in _criminals)
+                ApplyRole(c, PlayerRole.Criminal);
+        }
+
+        // minimal one-time split: order by id, first (1 + (N-1)/2) become hunters, the rest criminals.
+        // (same size rule as before, but frozen as fixed teams instead of re-rolled each round.)
+        private void BuildTeams(IReadOnlyList<ulong> clients)
+        {
             var ordered = new List<ulong>(clients);
             ordered.Sort();
 
-            int snipers = (n - 1) / 2; // hunter team is 1 witness + (N-1)/2 snipers
+            int n = ordered.Count;
+            int hunterCount = 1 + (n - 1) / 2; // 1 witness slot + (N-1)/2 snipers
 
+            _hunters.Clear();
+            _criminals.Clear();
             for (int i = 0; i < n; i++)
+                (i < hunterCount ? _hunters : _criminals).Add(ordered[i]);
+        }
+
+        // server-only. forget the fixed teams so the next assignment re-splits (call at match start).
+        public void ResetTeams()
+        {
+            _hunters.Clear();
+            _criminals.Clear();
+        }
+
+        // is this client on the hunter team this match? (read after teams are built)
+        public bool IsHunterTeam(ulong clientId) => _hunters.Contains(clientId);
+
+        // record the role and apply it through the same door SetRoleRpc uses (re-teleport the live player)
+        private void ApplyRole(ulong clientId, PlayerRole role)
+        {
+            _roles[clientId] = role;
+            if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
+                && client.PlayerObject != null
+                && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
             {
-                ulong clientId = ordered[(i + roundOffset) % n];
-                PlayerRole role;
-                if (i == 0)
-                    role = PlayerRole.Witness; // exactly one witness (index 0 of the rotated order)
-                else if (i <= snipers)
-                    role = PlayerRole.Sniper;
-                else
-                    role = PlayerRole.Criminal; // remainder are criminals (+1 when N is even)
-
-                _roles[clientId] = role;
-
-                // apply it through the same path SetRoleRpc uses: re-teleport the live player object
-                if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
-                    && client.PlayerObject != null
-                    && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
-                {
-                    controller.RespawnForRole(role);
-                }
+                controller.RespawnForRole(role);
             }
         }
     }

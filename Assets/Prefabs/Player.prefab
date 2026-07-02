@@ -4161,7 +4161,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
-  GlobalObjectIdHash: 4262671144
+  GlobalObjectIdHash: 1255344153
   InScenePlacedSourceGlobalObjectIdHash: 0
   DeferredDespawnTick: 0
   Ownership: 1
@@ -4196,6 +4196,7 @@ MonoBehaviour:
   reconcileThreshold: 0.1
   interpolationDelay: 0.1
   visual: {fileID: 4868148605327696447}
+  hitCollider: {fileID: 4708107627295818809}
   appearanceApplier: {fileID: 6358839518120969416}
   appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
 --- !u!114 &1069966132034548798

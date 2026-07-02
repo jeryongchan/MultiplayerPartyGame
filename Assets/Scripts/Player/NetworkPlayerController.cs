@@ -43,6 +43,12 @@ namespace FriendSlop.Player
         [SerializeField]
         private Transform visual;
 
+        // the player's shootable body hitbox (the dedicated CapsuleCollider NetworkShooter raycasts). hidden
+        // together with the mesh when the player is downed, so a corpse can't be shot again. optional; if
+        // unassigned, only the mesh hides.
+        [SerializeField]
+        private Collider hitCollider;
+
         [Header("Appearance")]
         // paints the modular character mesh from the replicated PlayerAppearance. lives on the Character child.
         [SerializeField]
@@ -76,6 +82,13 @@ namespace FriendSlop.Player
         // tree. owner reads it to gate input locally; server reads it to enforce authoritatively.
         public readonly NetworkVariable<PlayerRole> Role =
             new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
+
+        // alive/down state for the round. server-write, read everywhere. a criminal shot during Hunt is
+        // set false: its mesh + hitbox hide on every copy (OnValueChanged) and, on the owner, its input is
+        // frozen so it spectates in place until the next round. RespawnForRole revives it. defaults true so
+        // nobody spawns dead (and non-round systems that never touch it see a live player).
+        public readonly NetworkVariable<bool> IsAlive =
+            new NetworkVariable<bool>(true, writePerm: NetworkVariableWritePermission.Server);
 
         // this player's randomized look, rolled once by the server on spawn and replicated to every copy as
         // a small index struct (never mesh data). each machine paints its own character mesh from it via
@@ -216,6 +229,11 @@ namespace FriendSlop.Player
 
             _authoritativeState.OnValueChanged += OnAuthoritativeStateChanged;
 
+            // down/alive visuals: hide the mesh + hitbox on every copy when a player is downed. apply the
+            // current value now (covers late joiners who arrive mid-round) and react to changes after.
+            IsAlive.OnValueChanged += OnAliveChanged;
+            ApplyAliveVisual(IsAlive.Value);
+
             // paint the character mesh from the replicated appearance, and repaint if it changes later
             if (appearanceApplier != null)
             {
@@ -235,6 +253,7 @@ namespace FriendSlop.Player
         {
             _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
             Appearance.OnValueChanged -= OnAppearanceChanged;
+            IsAlive.OnValueChanged -= OnAliveChanged;
             if (NetworkManager != null && NetworkManager.NetworkTickSystem != null)
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
@@ -332,7 +351,10 @@ namespace FriendSlop.Player
             // movement so its own prediction and the server simulate the same still input, no reconcile
             // fight, no desync. physics (gravity/grounding) still runs on a zero MoveDir, so nobody floats.
             // note: sketch-phase containment is handled by scene geometry (invisible walls), not here.
-            bool frozen = GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen;
+            // frozen if the phase freezes everyone (SketchReveal cutscene) or this player is downed (a
+            // spectating criminal can't move).
+            bool frozen = (GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen)
+                || !IsAlive.Value;
 
             Vector2 rawMove = frozen ? Vector2.zero : (MoveInputOverride ?? ReadMoveInput());
             var input = new InputPayload
@@ -507,11 +529,32 @@ namespace FriendSlop.Player
                 return;
 
             Role.Value = role;
+            IsAlive.Value = true; // revive for the new round (mesh/hitbox re-show via OnValueChanged)
             var spawnPos = SpawnPointManager.Instance != null
                 ? SpawnPointManager.Instance.GetSpawnPoint(role)
                 : DebugSpawnPosition((int)OwnerClientId);
             TeleportTo(spawnPos);
             _authoritativeState.Value = CaptureState(_authoritativeState.Value.Tick);
+        }
+
+        // server-only. mark this player down (or revive). down players hide their mesh + hitbox (so they
+        // can't be shot again) on every copy and, on the owner, freeze input to spectate in place. called
+        // by NetworkShooter when a criminal is hit during Hunt.
+        public void SetAlive(bool alive)
+        {
+            if (IsServer)
+                IsAlive.Value = alive;
+        }
+
+        // runs on every copy when IsAlive flips: show/hide the mesh + shootable hitbox
+        private void OnAliveChanged(bool _, bool alive) => ApplyAliveVisual(alive);
+
+        private void ApplyAliveVisual(bool alive)
+        {
+            if (visual != null)
+                visual.gameObject.SetActive(alive);
+            if (hitCollider != null)
+                hitCollider.enabled = alive;
         }
 
         private void TeleportTo(Vector3 position)

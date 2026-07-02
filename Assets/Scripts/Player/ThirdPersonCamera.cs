@@ -130,8 +130,28 @@ namespace FriendSlop.Player
             _pitch = angles.x;
         }
 
+        // when set, the camera abandons follow/orbit and simply parks at this transform (pos + rotation),
+        // used for the witness's crime-scene view during the Sketch phase. clearing it returns to normal
+        // follow. a future free-look could let the view orbit around this anchor instead of hard-locking.
+        private Transform _fixedView;
+
+        // park the camera at a fixed transform (crime-scene view). overrides follow/orbit.
+        public void SetFixedView(Transform anchor) => _fixedView = anchor;
+
+        // return to normal follow/orbit
+        public void ClearFixedView() => _fixedView = null;
+
         private void LateUpdate()
         {
+            // crime-scene / cutscene override: snap to the anchor and skip all follow + orbit + scope
+            // logic. the drawing canvas (a UI overlay) still draws on top, like tracing paper over a photo.
+            if (_fixedView != null)
+            {
+                transform.SetPositionAndRotation(_fixedView.position, _fixedView.rotation);
+                UpdateCursorLock();
+                return;
+            }
+
             if (target == null)
                 return;
 
