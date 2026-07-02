@@ -17,6 +17,9 @@ namespace FriendSlop.Player
         private float moveSpeed = 5f;
 
         [SerializeField]
+        private float sprintSpeed = 8.5f;
+
+        [SerializeField]
         private float gravity = -20f;
 
         [SerializeField]
@@ -87,10 +90,67 @@ namespace FriendSlop.Player
         private float _verticalVelocity;
         private bool _jumpLatched;
         private int _currentTick;
+        private float _lastSimulatedSpeed;
+        private bool _lastSimulatedScoped;
+
+        // owner-only: right-click cycles hip(0) -> zoom1(1) -> zoom2(2) -> hip(0), AWP-style toggle
+        // instead of hold-to-scope. zoom level 1 and 2 both count as "scoped" for gameplay (movement
+        // facing, aim animation, gun grip); only the camera FOV differs between them, read directly
+        // by ThirdPersonCamera via ZoomLevel. not networked: only the owner's own camera needs the
+        // exact level, and Scoped (in StatePayload) already replicates the gameplay-relevant bool.
+        private int _zoomLevel;
+        private bool _zoomCyclePressed;
+
+        // owner-only: 0 = hip, 1 = scoped, 2 = scoped further in. drives ThirdPersonCamera's FOV.
+        public int ZoomLevel => _zoomLevel;
 
         // optional test hook: when set (e.g. by AutoStrafe), this raw move input replaces WASD on the
         // owner. stays null in normal play. lets a test drive movement through the real input path.
         public Vector2? MoveInputOverride { get; set; }
+
+        // the current horizontal speed of the character. works on owner, server, and pure remotes.
+        public float CurrentSpeed
+        {
+            get
+            {
+                bool iSimulateThis = IsOwner || IsServer;
+                if (iSimulateThis)
+                {
+                    // for owner/server, we use the intended speed from the last simulation tick.
+                    // CharacterController.velocity is unreliable in frame-based Update when
+                    // movement happens in fixed-interval Ticks.
+                    return _lastSimulatedSpeed;
+                }
+                else
+                {
+                    // remote interpolation
+                    if (_snapFrom == null || _snapTo == null) return 0f;
+                    Vector3 displacement = _snapTo.Value.State.Position - _snapFrom.Value.State.Position;
+                    displacement.y = 0f;
+                    float timeSpan = _snapTo.Value.ArrivalTime - _snapFrom.Value.ArrivalTime;
+                    if (timeSpan <= 0.001f) return 0f;
+                    return displacement.magnitude / timeSpan;
+                }
+            }
+        }
+
+        // true if the character is actively sprinting (moving faster than walking speed). works on
+        // owner, server, and pure remotes.
+        public bool IsSprinting => CurrentSpeed > (moveSpeed + 0.1f);
+
+        // true while this player is scoped in (aiming). works on owner, server, and pure remotes;
+        // remotes read it from the replicated StatePayload, same as position/rotation.
+        public bool IsScoped
+        {
+            get
+            {
+                bool iSimulateThis = IsOwner || IsServer;
+                if (iSimulateThis)
+                    return _lastSimulatedScoped;
+
+                return _snapTo?.State.Scoped ?? false;
+            }
+        }
 
         // remote entity-interpolation: keep the two most recent snapshots. each frame, render the
         // mesh at (now - interpolationDelay) by lerping between them, ~one tick in the past, so
@@ -199,6 +259,12 @@ namespace FriendSlop.Player
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null && kb.spaceKey.wasPressedThisFrame)
                     _jumpLatched = true;
+
+                // right-click cycles the zoom level (edge event, like Jump). only Snipers can scope,
+                // a Criminal's right-click stays a no-op, same gating ReadScoped() already enforced.
+                var mouse = UnityEngine.InputSystem.Mouse.current;
+                if (mouse != null && mouse.rightButton.wasPressedThisFrame && Role.Value == PlayerRole.Sniper)
+                    _zoomCyclePressed = true;
             }
             InterpolateTransform();
         }
@@ -252,6 +318,13 @@ namespace FriendSlop.Player
         // owner: predict locally, buffer, send to server
         private void OwnerTick()
         {
+            // consume the right-click edge caught in Update: cycle hip -> zoom1 -> zoom2 -> hip
+            if (_zoomCyclePressed)
+            {
+                _zoomLevel = (_zoomLevel + 1) % 3;
+                _zoomCyclePressed = false;
+            }
+
             int tick = _currentTick;
             Vector2 rawMove = MoveInputOverride ?? ReadMoveInput();
             var input = new InputPayload
@@ -261,6 +334,7 @@ namespace FriendSlop.Player
                 Jump = _jumpLatched,
                 Scoped = ReadScoped(),
                 AimDir = CameraForward(),
+                Sprinting = ReadSprintInput(),
             };
             _jumpLatched = false;
 
@@ -361,7 +435,14 @@ namespace FriendSlop.Player
                 _verticalVelocity = Mathf.Sqrt(2f * -gravity * jumpHeight);
             _verticalVelocity += gravity * dt;
 
-            Vector3 velocity = input.MoveDir * moveSpeed + Vector3.up * _verticalVelocity;
+            // only allow sprinting if we have actual movement input, and we are not scoped
+            float currentSpeed = (input.Sprinting && !input.Scoped && input.MoveDir.sqrMagnitude > 0.001f) ? sprintSpeed : moveSpeed;
+
+            // track speed + scope for animation (owner/server side)
+            _lastSimulatedSpeed = input.MoveDir.sqrMagnitude > 0.001f ? currentSpeed : 0f;
+            _lastSimulatedScoped = input.Scoped;
+
+            Vector3 velocity = input.MoveDir * currentSpeed + Vector3.up * _verticalVelocity;
             _controller.Move(velocity * dt);
 
             // facing: scoped faces the aim direction (body points where you shoot, A/D strafe relative
@@ -383,10 +464,13 @@ namespace FriendSlop.Player
                 Position = transform.position,
                 Rotation = rotation,
                 VerticalVelocity = _verticalVelocity,
+                Scoped = input.Scoped,
             };
         }
 
-        // build a StatePayload from the controller's current transform, labeled with the given tick
+        // build a StatePayload from the controller's current transform, labeled with the given tick.
+        // Scoped defaults to false here (used for spawn-time init and reconcile's CaptureState calls,
+        // neither of which have a live input to read).
         private StatePayload CaptureState(int tick) =>
             new StatePayload
             {
@@ -466,15 +550,17 @@ namespace FriendSlop.Player
             return new Vector2(x, y);
         }
 
-        // scoped while right mouse is held (a held/level state, read at tick time like WASD, not latched).
-        // only Snipers scope; a Criminal's right-click must not flip the body into face-aim/strafe (that's
-        // a sniper-only stance). role is replicated, so the owner reading its own role here is valid.
-        private bool ReadScoped()
+        // scoped while zoom level > 0 (AWP-style toggle: right-click cycles hip -> zoom1 -> zoom2 -> hip,
+        // caught as an edge in Update and consumed in OwnerTick, see _zoomCyclePressed/_zoomLevel).
+        // both zoom levels count as scoped for movement facing/strafe. only Snipers scope; a Criminal's
+        // right-click must not flip the body into face-aim/strafe (that's a sniper-only stance); the
+        // Update-side edge-catch already gates on Role, so _zoomLevel simply never advances for them.
+        private bool ReadScoped() => _zoomLevel > 0;
+
+        private bool ReadSprintInput()
         {
-            if (Role.Value != PlayerRole.Sniper)
-                return false;
-            var mouse = UnityEngine.InputSystem.Mouse.current;
-            return mouse != null && mouse.rightButton.isPressed;
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            return kb != null && kb.shiftKey.isPressed;
         }
 
         // the camera's horizontal forward, the aim direction the body faces when scoped
@@ -493,8 +579,9 @@ namespace FriendSlop.Player
             public int Tick;
             public Vector3 MoveDir;
             public bool Jump;
-            public bool Scoped; // right mouse held: face the aim direction and strafe
+            public bool Scoped; // zoomed in: face the aim direction and strafe
             public Vector3 AimDir; // camera's horizontal forward, the body faces this when scoped
+            public bool Sprinting;
 
             // one method both serializes and deserializes (s decides direction), so field order matters
             public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
@@ -504,6 +591,7 @@ namespace FriendSlop.Player
                 s.SerializeValue(ref Jump);
                 s.SerializeValue(ref Scoped);
                 s.SerializeValue(ref AimDir);
+                s.SerializeValue(ref Sprinting);
             }
         }
 
@@ -513,6 +601,7 @@ namespace FriendSlop.Player
             public Vector3 Position;
             public Quaternion Rotation;
             public float VerticalVelocity;
+            public bool Scoped;
 
             public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
             {
@@ -520,6 +609,7 @@ namespace FriendSlop.Player
                 s.SerializeValue(ref Position);
                 s.SerializeValue(ref Rotation);
                 s.SerializeValue(ref VerticalVelocity);
+                s.SerializeValue(ref Scoped);
             }
         }
     }

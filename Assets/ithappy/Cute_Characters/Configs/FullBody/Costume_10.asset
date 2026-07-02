@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e52fb50d25642a6bb591adc507bd43e, type: 3}
+  m_Name: Costume_10
+  m_EditorClassIdentifier: 
+  Slots:
+  - Type: 1
+    GameObject: {fileID: 919132149155446097, guid: 68f48ad323004781ba13de7dba85bce6,
+      type: 3}
+  - Type: 8
+    GameObject: {fileID: 919132149155446097, guid: 01af1a7e061b4b89ad876b2bad9f075f,
+      type: 3}
+  - Type: 6
+    GameObject: {fileID: 919132149155446097, guid: 80d1a182def244afbb102ab2ce8542e3,
+      type: 3}
+  - Type: 11
+    GameObject: {fileID: 919132149155446097, guid: fb796b30524c4f959b0a163e63bd539b,
+      type: 3}
+  - Type: 12
+    GameObject: {fileID: 919132149155446097, guid: 6232b887c209429493bb884c36393c78,
+      type: 3}

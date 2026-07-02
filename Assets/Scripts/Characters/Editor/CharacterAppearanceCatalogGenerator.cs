@@ -18,7 +18,7 @@ namespace FriendSlop.Characters.Editor
     public static class CharacterAppearanceCatalogGenerator
     {
         private const string SlotLibraryPath =
-            "Assets/ithappy/Creative_Characters_FREE/Configs/SlotLibrary.asset";
+            "Assets/ithappy/Cute_Characters/Configs/SlotLibrary.asset";
 
         private const string CatalogPath =
             "Assets/Settings/CharacterAppearanceCatalog.asset";
@@ -27,47 +27,44 @@ namespace FriendSlop.Characters.Editor
         private static readonly HashSet<string> AlwaysOnSlotTypes = new() { "Body", "Faces" };
 
         // ithappy's SlotType enum names to the child GameObject name on the saved character prefab.
-        // they match 1:1 except "Outerwear" (SlotType) to "Outerwear" child (confirmed). kept as an
+        // they match 1:1 except "FaceAccessories" (SlotType) to "Face_Accessories" child. kept as an
         // explicit map so a pack with different child naming is a one-line change here, not a code hunt.
         private static readonly Dictionary<string, string> SlotTypeToChildName = new()
         {
             { "Body", "Body" },
+            { "Costumes", "Costumes" },
+            { "Ears", "Ears" },
+            { "FaceAccessories", "Face_Accessories" },
             { "Faces", "Faces" },
-            { "Outerwear", "Outerwear" },
-            { "Pants", "Pants" },
-            { "Accessories", "Accessories" },
             { "Glasses", "Glasses" },
             { "Gloves", "Gloves" },
             { "Hairstyle", "Hairstyle" },
             { "Hat", "Hat" },
+            { "Outfit", "Outfit" },
+            { "Outwear", "Outwear" },
+            { "Pants", "Pants" },
             { "Shoes", "Shoes" },
+            { "Shorts", "Shorts" },
+            { "Socks", "Socks" },
         };
 
         [MenuItem("Tools/FriendSlop/Generate Character Appearance Catalog")]
         public static void Generate()
         {
-            var library = AssetDatabase.LoadAssetAtPath<ScriptableObject>(SlotLibraryPath);
+            var library = AssetDatabase.LoadAssetAtPath<ithappy.Cute_Characters.CharacterCustomizationTool.Editor.SlotLibrary>(SlotLibraryPath);
             if (library == null)
             {
                 Debug.LogError($"[CatalogGenerator] SlotLibrary not found at {SlotLibraryPath}");
                 return;
             }
 
-            var so = new SerializedObject(library);
-            var slotsProp = so.FindProperty("Slots");
-            if (slotsProp == null)
-            {
-                Debug.LogError("[CatalogGenerator] SlotLibrary has no 'Slots' property.");
-                return;
-            }
-
             var definitions = new List<CharacterAppearanceCatalog.SlotDefinition>();
 
-            for (int i = 0; i < slotsProp.arraySize; i++)
+            foreach (var slotEntry in library.Slots)
             {
-                var entry = slotsProp.GetArrayElementAtIndex(i);
-                var typeProp = entry.FindPropertyRelative("Type");
-                string slotTypeName = typeProp.enumNames[typeProp.enumValueIndex];
+                if (slotEntry == null) continue;
+
+                string slotTypeName = slotEntry.Type.ToString();
 
                 if (!SlotTypeToChildName.TryGetValue(slotTypeName, out string childName))
                 {
@@ -77,13 +74,12 @@ namespace FriendSlop.Characters.Editor
 
                 // flatten every variant mesh across all sub-groups of this slot, in group-then-variant order
                 var meshes = new List<Mesh>();
-                var groupsProp = entry.FindPropertyRelative("Groups");
-                for (int g = 0; g < groupsProp.arraySize; g++)
+                foreach (var groupEntry in slotEntry.Groups)
                 {
-                    var variantsProp = groupsProp.GetArrayElementAtIndex(g).FindPropertyRelative("Variants");
-                    for (int v = 0; v < variantsProp.arraySize; v++)
+                    if (groupEntry == null) continue;
+
+                    foreach (var go in groupEntry.Variants)
                     {
-                        var go = variantsProp.GetArrayElementAtIndex(v).objectReferenceValue as GameObject;
                         Mesh mesh = ExtractMesh(go);
                         if (mesh != null)
                         {

@@ -15,73 +15,384 @@ MonoBehaviour:
   slots:
   - childName: Body
     variants:
-    - {fileID: -964220427784028482, guid: 39ca3f5f903246e79dac11707013e4e8, type: 3}
+    - {fileID: 4547268506808534155, guid: b97945760d654fbaa75f5ba32af97f3d, type: 3}
+    - {fileID: -4893472716301505488, guid: 1b6b214250ef481badd01283b67f8105, type: 3}
+    - {fileID: 3941906569799096821, guid: 83ee0e13240142aaa601ceb63f974dd1, type: 3}
+    - {fileID: 8388000445221942392, guid: 7441ccd22f804987beb25860f5ed4c4d, type: 3}
+    - {fileID: 2008065780467351342, guid: ff9895dfba18418690b88e489a7c1a08, type: 3}
+    - {fileID: 5743854858385588186, guid: 116c7d48c96e4a03be7b430ee8d0c491, type: 3}
+    - {fileID: 280115149947420147, guid: 617a4260c1644ae78e6adadb88f5a060, type: 3}
+    - {fileID: -2015436376384702016, guid: c1e06073d62b4ff5af76fa18b88484ff, type: 3}
+    - {fileID: 9048077219780403455, guid: 612e713bfa8142758c98b9112dca202a, type: 3}
+    - {fileID: 2176721902359944379, guid: c49c9e5b78d54de3a9c7c02d3383ef29, type: 3}
+    - {fileID: 7945091823169681325, guid: 5961978e59424c2da1851453687f22b2, type: 3}
+    - {fileID: -1830870998183431705, guid: 242b0dc5f4f0490096dc72830376d2fe, type: 3}
+    - {fileID: -8401635843416016539, guid: 65fa7b6c096a4c49a36d1b119e476d62, type: 3}
+    - {fileID: 8345810069391051103, guid: 01a91cc39b5546729b712aeb83476aa1, type: 3}
+    - {fileID: -1389479154790947474, guid: 684bee1c6b9445fe8be11f143885ceda, type: 3}
+    - {fileID: -5778889572084675727, guid: e11aa6a0ef0949a098cded602707f5b5, type: 3}
     alwaysOn: 1
     enableChance: 1
+  - childName: Ears
+    variants:
+    - {fileID: 2007958340126635565, guid: e652db02aec64793b73e17ee8a743081, type: 3}
+    - {fileID: -2607531051764063519, guid: 7248638db724470da2d8542b02dc4c30, type: 3}
+    - {fileID: -174897052864434441, guid: 78675f7c6f8e452f8eae212ec312f0a4, type: 3}
+    - {fileID: -6697075313345773477, guid: f1ef343d206a4bed8c2cb00157953001, type: 3}
+    - {fileID: 2348777807094694665, guid: 401eeed7637f4e0e9f4c62d7063dde72, type: 3}
+    - {fileID: -7075839446127407199, guid: b3b9428bd6ff46929f4094866a078632, type: 3}
+    - {fileID: -9136503082031907183, guid: 4f3c52dbc89244ef88b3b2477ef1acaa, type: 3}
+    - {fileID: -5538567213379833597, guid: 1039dc7db1724e02b861d95be6d4d58e, type: 3}
+    - {fileID: 7672276639765617633, guid: f414313cc0b648ab8a3608ae1d32d691, type: 3}
+    - {fileID: 7560090271766871904, guid: 8f6300cd64f9421283b40c1e450e656d, type: 3}
+    - {fileID: -4736664366806554559, guid: da4f712863454b55af4035c880efdf9d, type: 3}
+    - {fileID: -1500957159420071131, guid: 2b448fedadb248b6a40a20e6a2e2c235, type: 3}
+    - {fileID: 6778177244910311627, guid: 4931f0ed6e794f489c4ea15920d313c5, type: 3}
+    - {fileID: -5966224881927414014, guid: 7c63915900b74ac4ad2ec5a38372d78b, type: 3}
+    - {fileID: -7783809449597842427, guid: ec47912321f744bbb0cab89bc5770695, type: 3}
+    - {fileID: 4330544551546436275, guid: ffb155671b674f858df6d154f280d1b2, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Face_Accessories
+    variants:
+    - {fileID: 2690904636209818544, guid: c49bc1a010124ee29d0478f4f806788a, type: 3}
+    - {fileID: 922465483669496695, guid: 02fa88552c4541478327b4507f5aec79, type: 3}
+    - {fileID: -5467526475432957500, guid: 42ad02e721f8472f8862927d2aade477, type: 3}
+    - {fileID: 5020135125209749104, guid: 7b8b310df2dd4383ba7190b14b9945b4, type: 3}
+    - {fileID: -5251871448524690028, guid: b205d393b01d45ebbff187245881dba3, type: 3}
+    - {fileID: -1208107950721927292, guid: ca4c4cae7a614490bdf89cb091d85a8d, type: 3}
+    - {fileID: -7048557244817341974, guid: ff024c764e984c08966b52367ad76829, type: 3}
+    - {fileID: -2012351748801333022, guid: 1ba52131ccba4197857f57b7041a2ea9, type: 3}
+    - {fileID: -4816715140062288996, guid: 1668cfb80fb94a00bbe5be84df8a504f, type: 3}
+    - {fileID: -5320270920472852407, guid: bf9fd77d66f64a4c974f5e94e3771025, type: 3}
+    - {fileID: 5043498141621449621, guid: 32cc5357cf304143a8100ece4f2c2804, type: 3}
+    - {fileID: 1102653518638439823, guid: 4b6aa4eaaef74977b3462b5b3e4ff54d, type: 3}
+    - {fileID: 6080153035096876434, guid: a5ab9bb0aa7a4bfe859d7eee01f5fb18, type: 3}
+    - {fileID: -4229360929217993988, guid: 5913e323f2264dbb8b727b9ac9f9a6b4, type: 3}
+    - {fileID: 932137687117037156, guid: 465692f5ba4341799dbd341c9e7fc90e, type: 3}
+    - {fileID: 2445837914857691004, guid: c5d35fc9b8e54977a33c7b206ab88579, type: 3}
+    - {fileID: -5519764058420821164, guid: ba44ddb7f91c41d1b0f86b97be6d700b, type: 3}
+    - {fileID: 7016731244102417404, guid: 7085a66d913b4ba2a06d999b36c6ec9a, type: 3}
+    - {fileID: 7008612071592249925, guid: 84dee1cdc1264f7a8de397155db1c440, type: 3}
+    - {fileID: -5065822172151319858, guid: ba9ff833c4b44d76893c7c57d8a0b704, type: 3}
+    - {fileID: 8815313747440939067, guid: eea4e7a395594843a5ba8c8e848da4f3, type: 3}
+    - {fileID: 6703384877360831650, guid: 9d1993eec076463dbcb8ff5ef68c008b, type: 3}
+    - {fileID: 446491160540972132, guid: 35aa10f1870e42a1be8a98c6847a8e24, type: 3}
+    - {fileID: -7842831479439361333, guid: 4b12ae8cd1bb4ef5b15b9e58bcc07023, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
   - childName: Faces
     variants:
-    - {fileID: -8518051590879840720, guid: 2fe4b0e4b60c489c9b9e8c9ba491c82f, type: 3}
-    - {fileID: -4389200089894859703, guid: f54f7c627ffd47c493e3dc059530089b, type: 3}
-    - {fileID: -7927354642031663450, guid: 3469b524b3cb4a2e98832a439835f74f, type: 3}
+    - {fileID: 6640912730325609018, guid: 3811f307e29a4959aac7826666dd44e2, type: 3}
+    - {fileID: -8368939201001581290, guid: 79718912c8c6477fb2cc5e9dcc84a17c, type: 3}
+    - {fileID: 5141641696883965027, guid: 1e1cc5a229204b619d59716f4d204855, type: 3}
+    - {fileID: -495019052737741562, guid: 6c3388f9edd643a485c7e3467dd03a35, type: 3}
+    - {fileID: 7379554815695809831, guid: 7c72a130a7cd45d88aea182e20addf79, type: 3}
+    - {fileID: 1625064202414945240, guid: 72fc5bf984074f80a41a6b835f043feb, type: 3}
+    - {fileID: 7975453246016493325, guid: 4405b14606c34c7c855197c5cefeb376, type: 3}
+    - {fileID: 7789941019589327193, guid: 7ee4864ac8074a28a09370c05b77b4af, type: 3}
+    - {fileID: -2447494612718224515, guid: c7be267a9f244faa811b1636153e468a, type: 3}
+    - {fileID: 937192305888615646, guid: 63c512a86833412baf11ad2e9ca2559f, type: 3}
+    - {fileID: 6602882174121877429, guid: 3921664f065b4abfa5c2daf0f8737c77, type: 3}
+    - {fileID: -4830836463773487509, guid: ade40251bfa740f59cd4ca621a186ea2, type: 3}
+    - {fileID: 8061453615009182071, guid: 28f0bd32b95d40ab940f972b6a17a522, type: 3}
+    - {fileID: -1611860017695686296, guid: dab9c946f0bb452cb393d1958809c4e7, type: 3}
+    - {fileID: 4020786635123323514, guid: c3d15916fd7b4d3ca40381d72a9307e1, type: 3}
+    - {fileID: 7575000228736350723, guid: cc506bce6a334580bf867d91bf7b5cbd, type: 3}
+    - {fileID: 1269870293874467541, guid: 6415783eac8a473a8d1f94ffdd3aaf07, type: 3}
+    - {fileID: -232985902019336209, guid: 538ffe9925634eafa254cab80dc3b74e, type: 3}
+    - {fileID: -8606694061391205810, guid: 0db7ae659ab64b0084481dbf3cffd8cb, type: 3}
+    - {fileID: -756438820484449877, guid: e641782ecda44b728d3df622b5952cd1, type: 3}
+    - {fileID: -8698229289294279558, guid: 4baffadb46fb43abb9637f443e6b1243, type: 3}
+    - {fileID: -2725216400432301782, guid: 2080dc2ea66f4bd8bc0710708e74e31c, type: 3}
+    - {fileID: -3936833000329690229, guid: b8c6e3a76ed0470d898c354d6c309ce1, type: 3}
+    - {fileID: 6286029156284052730, guid: 1ee860567ff44c359e60e3b840cd6df1, type: 3}
+    - {fileID: 8647532066802546931, guid: 494c5c243a5c4407923baf248fee48b6, type: 3}
+    - {fileID: -7345737174876868659, guid: 3fd177839f8a49c6a68d6f99c7600bf0, type: 3}
+    - {fileID: -893937584756115209, guid: f43f1fccdcd8465e93fb7e446b180483, type: 3}
+    - {fileID: 7554961855229222057, guid: aef1fe00d2104c8aaec13da77c09950d, type: 3}
+    - {fileID: -5434416156686821163, guid: 2634ca2ea4984a68ba586f2510168b43, type: 3}
+    - {fileID: 6825457632066959147, guid: dbb95586a3c04781956fe21c2f466c00, type: 3}
+    - {fileID: 7837523244641986479, guid: 4ca2a414757e4566a5d218d18809bd63, type: 3}
+    - {fileID: 5393233554657853885, guid: 3523c21b38ae4f01bc931fa85f9d61bc, type: 3}
+    - {fileID: -7341536163166735834, guid: 99ae64623ec34f47b6cd906d31f3ed26, type: 3}
+    - {fileID: 5953942299692911655, guid: 7d5c2e74d64c4fd8b30b8a20aa4fc192, type: 3}
+    - {fileID: -3010723037219268504, guid: 174961b9c73945059c6b7c40c364d7b1, type: 3}
+    - {fileID: -6361447725254905924, guid: 3e9279d581134f9499f9fb86c7c59812, type: 3}
+    - {fileID: 1469468218441492029, guid: 6a2c7415e46e40e79d8c53def0a95919, type: 3}
+    - {fileID: 3552040318386271021, guid: 3612a149c0414802826a46d39c898944, type: 3}
+    - {fileID: 7862317144360618988, guid: b3cfb8cf9bb944ec99e224873aafe0fd, type: 3}
+    - {fileID: 7521253093577084009, guid: f88b4e50b33f4256abb550a393e2c6c3, type: 3}
     alwaysOn: 1
     enableChance: 1
-  - childName: Outerwear
-    variants:
-    - {fileID: 9154480696012802162, guid: 32ac0b2c99b2435cb665dd1ece70b6ab, type: 3}
-    - {fileID: 1617087265200637012, guid: 7bd2259758164610a2b85b19f7a0c2a5, type: 3}
-    - {fileID: -3950228387462889971, guid: ec43f29a8b8d4f6b895e2518035c2e2e, type: 3}
-    - {fileID: 9053217031431064551, guid: fb022c26355942c3a153661fe453b3a6, type: 3}
-    - {fileID: 8213599088856497855, guid: 72ebb9ef8d014c9a9ce77d133d3f0d1e, type: 3}
-    alwaysOn: 0
-    enableChance: 0.35
-  - childName: Pants
-    variants:
-    - {fileID: -987022824948863293, guid: edb7369940854ad1bd9cef9adb83ab37, type: 3}
-    - {fileID: -4396149814923931179, guid: 3759908ff23c45529985ee7622fd270d, type: 3}
-    - {fileID: -7058832261164120551, guid: 32b70401d2674966b252c19094cc8e32, type: 3}
-    alwaysOn: 0
-    enableChance: 0.35
-  - childName: Accessories
-    variants:
-    - {fileID: 7061910613977320673, guid: a2c37b4540c64dca9b853d2f8424e153, type: 3}
-    - {fileID: 2609398250338908505, guid: b7485eab03f4492ba1b917ef542e03cc, type: 3}
-    - {fileID: -3811569408259832331, guid: 7f83d94aaf054ebaa69b583603f1ffba, type: 3}
-    - {fileID: 2912484300477787147, guid: 841939df083440b08890b6456d9acfca, type: 3}
-    - {fileID: -7842831479439361333, guid: 3376c80d08014cc595b86677a16d0ef3, type: 3}
-    alwaysOn: 0
-    enableChance: 0.35
   - childName: Glasses
     variants:
-    - {fileID: 3231055992845446417, guid: 74e90d5f69284bc89b300e219622c558, type: 3}
-    - {fileID: 4124652187440467762, guid: 031b9791be8a4424820a6d57f00ec252, type: 3}
+    - {fileID: -6671733185959201944, guid: d6e2bbc2f38b46309f85d725c6553229, type: 3}
+    - {fileID: 6798483999639894891, guid: 03f820d9b17842b5af5963743da7c795, type: 3}
+    - {fileID: 6515110658399377313, guid: b1ccc0f62e114d5aab516e6eba124220, type: 3}
+    - {fileID: 1790028703794667852, guid: f6a0454b8a4d4064bd867cc4418b8813, type: 3}
+    - {fileID: -9172450345181602521, guid: d9517fabff8143189546a381efdaa0d1, type: 3}
+    - {fileID: -775482647884655988, guid: 1259d7057ad24166ace2ad4b66400cfb, type: 3}
+    - {fileID: -159286390556128128, guid: 956caba0c609400cbf2fcfce636322f8, type: 3}
+    - {fileID: 5624960721693611791, guid: cd6d568b8ff84a6cb22907e6e43db79c, type: 3}
+    - {fileID: 1712572404774839199, guid: 20eb898fe39f4160ae0d07789291b9ac, type: 3}
+    - {fileID: -9029249157746540803, guid: e4956dde038840ce886cefe3e11b4778, type: 3}
+    - {fileID: 6852173730980118814, guid: b648e11b689745d4ab71309d42d567d6, type: 3}
+    - {fileID: -226546173619633230, guid: f4cc6cdd105849c9881c2e5af4af9497, type: 3}
+    - {fileID: -332557806375124977, guid: 4e4a258c4ffc4d3492c3676d327f91b4, type: 3}
+    - {fileID: -4092947303771764159, guid: 7b187f573055456c8df39032a3ba4870, type: 3}
+    - {fileID: 6982626748009360245, guid: 66e0ee2d40aa4a53a8efbd5770fc1c1c, type: 3}
+    - {fileID: -5574458450116066273, guid: f060b72cd1894658b15e129682551ee4, type: 3}
+    - {fileID: 3602815358950184671, guid: 80af612a14b34fda83c678df542f1f8c, type: 3}
+    - {fileID: 8474558328833878112, guid: 798041f2139b478497386950cff9bd97, type: 3}
+    - {fileID: 749311080628650126, guid: 55a3ea41d98846c28add531cd6070b74, type: 3}
+    - {fileID: -5273564898059390180, guid: a30c8fa9168f4abdb181a05aa0b355ff, type: 3}
+    - {fileID: -5492294684221893851, guid: 76af6c5e9b384e70914ea599d20a0df2, type: 3}
+    - {fileID: -2410551005973888252, guid: 97539c0fe97e4127bb2ce6775410738a, type: 3}
     alwaysOn: 0
     enableChance: 0.35
   - childName: Gloves
     variants:
-    - {fileID: 4388357067006938284, guid: 6e6a82e0c21a4286a4fffbda80c083ce, type: 3}
-    - {fileID: -2628522999209309539, guid: a16f866300a64599b683c7d9a881d94b, type: 3}
+    - {fileID: -4162374172680952391, guid: 1bf76b9af4ec41ef80054a4d82fab39f, type: 3}
+    - {fileID: 3107316501390020968, guid: 5439af8d23eb405db725833849290c36, type: 3}
+    - {fileID: 2561388121985504039, guid: 5b8abebca1a84492b41f5d4fd4c4372c, type: 3}
+    - {fileID: -5818625397338339585, guid: df4c6c4b9a064588b265d27b56f835f7, type: 3}
+    - {fileID: -1689294013771715128, guid: 280dc2cbbb594977bb0e1af9eb673d8e, type: 3}
+    - {fileID: -9222017322873844345, guid: 7f26a80b86bf49a197a9f8568d1739d6, type: 3}
+    - {fileID: -9141953723142778236, guid: 3285972b2be946469e842633854d042d, type: 3}
+    - {fileID: 263952539374509022, guid: 380a300b6d7f4e62873be6aafdacae99, type: 3}
+    - {fileID: 1944194995282394827, guid: 538c2b25bef64424bb4e24815840b578, type: 3}
+    - {fileID: 8172913183357672665, guid: b690fd3777844ef7b8945911cdb9a175, type: 3}
+    - {fileID: 6841251067624967781, guid: e56c47c8917d422998959aa9363d3c15, type: 3}
+    - {fileID: 4475671670049435229, guid: 7a9a56ab541043eb9a5fedb5ab453971, type: 3}
     alwaysOn: 0
     enableChance: 0.35
   - childName: Hairstyle
     variants:
-    - {fileID: -8820499275058686143, guid: cd46cdfa74f74f319fbedcf83332655a, type: 3}
-    - {fileID: 2589799688786906243, guid: ce516e9da79f4561a3fef90438e94d18, type: 3}
-    - {fileID: -4695107088515116087, guid: 2b3da96c4e704a238bb87eab9c144a69, type: 3}
+    - {fileID: -9099924787982362520, guid: ef987db9e1704c85a16c459350ac3f0b, type: 3}
+    - {fileID: 8613167906018862591, guid: 3013d40cda284693bb1bf235deb0dc7d, type: 3}
+    - {fileID: 6830312907567710579, guid: 6ec6781afc5f4ee8856800a59cffcdce, type: 3}
+    - {fileID: 8668323454128984872, guid: 6adc06b1924b4ba2bffdee73758a4dda, type: 3}
+    - {fileID: -6043340416718389272, guid: 123a168dfac84c1c87ae1f99fa7180fa, type: 3}
+    - {fileID: -4751783066792492378, guid: c56d12512eee4bd0831cb5072804d3b5, type: 3}
+    - {fileID: -1068320908263121244, guid: f66058943f4b477fa6a36a3ed98873d7, type: 3}
+    - {fileID: 6103011825080252158, guid: dd78620aa83746f3a8efc55e8d6665ce, type: 3}
+    - {fileID: -2942217772744370684, guid: d40c0110e6e04be8a07ed19f49744d6e, type: 3}
+    - {fileID: 8367926965414877750, guid: 779dfd12d64048acb7c37d6ea36f7400, type: 3}
+    - {fileID: 3536548406379320622, guid: 09ae4ba421da4a37bb6d0a46416ded25, type: 3}
+    - {fileID: -5246353563433528227, guid: 31614f4b186140d09a751f93ade2fd0b, type: 3}
+    - {fileID: -6294066499648681602, guid: f1ba387859214d2fb87e57731f1d328f, type: 3}
+    - {fileID: 3018962007163039132, guid: f3a8c8343a5f4ecdbc766a442ae0308d, type: 3}
+    - {fileID: 7002060529440858676, guid: dfc7da245f214cf6bb3e93836b45029e, type: 3}
+    - {fileID: 4252396502019239421, guid: 4ac68e701d944cd084024f60885b6954, type: 3}
+    - {fileID: 9061160270243903156, guid: ca6e9f66785d43ec83e6a3cb5f24707c, type: 3}
+    - {fileID: -8345425590570195464, guid: bfce6efaf59444b2b6a6e14f296e5c44, type: 3}
+    - {fileID: -1195338155682352043, guid: ed8f6fb2fdab4687bba8280eb810c619, type: 3}
+    - {fileID: 4275249122862143168, guid: f1d54fc997a94aaf9ce6dda64dda70e9, type: 3}
+    - {fileID: -3841399714197424122, guid: 3bdfd77280a34b74be164198d9b11ce6, type: 3}
+    - {fileID: 1059401669833748019, guid: 5f9ef013668a4dd8b6f75dacb99c1e39, type: 3}
+    - {fileID: -4057379013395947338, guid: df7b3bc3a3b542629c01785670f2e0bb, type: 3}
+    - {fileID: 6161661438862893277, guid: 258ab8481ec54bb4a586751775488384, type: 3}
+    - {fileID: -7840697787668821939, guid: bdaeae72e94044859c685ca2142f18fc, type: 3}
+    - {fileID: 6973367804094267596, guid: 991ee2afd35a4d0db9680217ee236d25, type: 3}
+    - {fileID: 8714351932910002507, guid: 454098f0ecaf4da79ceaffb9909b27fd, type: 3}
+    - {fileID: -2160950620445992622, guid: a33c34617d7e461cb2421145be1e91c1, type: 3}
+    - {fileID: 1477927270879988596, guid: e5c2e8e7c49d45668197c709a64c9704, type: 3}
+    - {fileID: -5492490688447476749, guid: 5ce82ff518ab4519ab4cf519a086e6b3, type: 3}
     alwaysOn: 0
     enableChance: 0.35
   - childName: Hat
     variants:
-    - {fileID: -25535521549600216, guid: dd126cd2cc8742438343f03208de04e4, type: 3}
-    - {fileID: -5514853612500976910, guid: 50fa454bad2243cf8984fe2cc6702c84, type: 3}
-    - {fileID: -7955281462440156075, guid: 13c9767009ef455cb2eb3ce20d326201, type: 3}
-    - {fileID: -6976336618207450407, guid: d3a55dfc849142e298574ed03209fd44, type: 3}
+    - {fileID: 214622672758511181, guid: 6764b452390948aa887e6b5c5f0b1df2, type: 3}
+    - {fileID: 5501265926661890790, guid: dddd4c7bb34f46ab84187e1bdc7a32fc, type: 3}
+    - {fileID: -5515578995233832970, guid: 6a85695b1ae14b1287dc02a18739a85e, type: 3}
+    - {fileID: 7968860779803917414, guid: f6fe15b1a0434ed99c50c3181fdba04e, type: 3}
+    - {fileID: 1547650462011832544, guid: 43bf08b4962d4a16bc50b26dd7dc6e2a, type: 3}
+    - {fileID: -5674248301500801536, guid: e38086e4be8546d9809866ccd951cc63, type: 3}
+    - {fileID: -4470173197721515907, guid: 785370fea38c49dd8a5394c67f4852ff, type: 3}
+    - {fileID: -882614835948362321, guid: eeac718874fd47449b89a2bcae1822c8, type: 3}
+    - {fileID: -7690195894340951604, guid: a75cd9adac41425793985c12fbb4418b, type: 3}
+    - {fileID: -1210907049786396696, guid: 677ca07d32e5481c990a06acd1d420e5, type: 3}
+    - {fileID: 2098320913111731761, guid: a8d7105b143249d8819a31f93f6ae057, type: 3}
+    - {fileID: -8905634579895914701, guid: c0b440ff379d4ce29460772ab5dfd586, type: 3}
+    - {fileID: -668942240984229393, guid: 6f048a7fab6447be8e06a6792a6a090c, type: 3}
+    - {fileID: -6771367002260374918, guid: 9606217d901c4b02b6ba76fae7679f79, type: 3}
+    - {fileID: -2344795699758608244, guid: f0a578513523450dbcbba62df07d33b8, type: 3}
+    - {fileID: 4861141166607117748, guid: f6755e2d1dbb4f9ab96b816a62c414f1, type: 3}
+    - {fileID: -1297108719770905208, guid: d125cd9d7627465abba9a2f070e1107b, type: 3}
+    - {fileID: -6123457707218253605, guid: 36325eb67510481c91cf6f9da9ae8417, type: 3}
+    - {fileID: 3224723347871804339, guid: a2546aa3e0f84a1186a339136189a53e, type: 3}
+    - {fileID: -6846487467213790373, guid: 2cb761127da04fb4b27bcf5fe31da506, type: 3}
+    - {fileID: 6123469767089558357, guid: 1e278d576a7844f7b7efff08b19cc977, type: 3}
+    - {fileID: -2473588929971102301, guid: bca809202d4845c79ce4559396bcfee8, type: 3}
+    - {fileID: -8978472777163451318, guid: 098c9059224646449f651dc9125835e9, type: 3}
+    - {fileID: 3371760329551227306, guid: bf7eb42fe9804874a4d6572d1c3bd5e6, type: 3}
+    - {fileID: -6113232875877755683, guid: f1939c32b5714e3e87822bfdb7680808, type: 3}
+    - {fileID: -403007501721934695, guid: 17575adef6574a3581c2b6cea501b962, type: 3}
+    - {fileID: 1222083850321373901, guid: 864cdf298cd94633ad114f54359ebf39, type: 3}
+    - {fileID: 8915656358313499504, guid: 7731cf240064418c8bf0f4b93d6a84fd, type: 3}
+    - {fileID: -6625262509472948886, guid: 837401066fda45358df3cdb48cffd8a7, type: 3}
+    - {fileID: 1192719401098325252, guid: c3bdeea96e204d44a327a5b39a775c9d, type: 3}
+    - {fileID: -2582630324360606144, guid: 6f61f439c0a244b58738c478f78079a5, type: 3}
+    - {fileID: 4324725956384583524, guid: d2294e1765384e0399a8034835529c84, type: 3}
+    - {fileID: -4033012779308271636, guid: 02f4ce9358b541ad8b9f4eedbf9332d9, type: 3}
+    - {fileID: 2426509594422923264, guid: b26f72551bd04e48aa570b5d059e0ff9, type: 3}
+    - {fileID: -3327899083095926973, guid: 07ac3d0173ff4f6fafb6037539062286, type: 3}
+    - {fileID: -1045212532749174248, guid: 4a3096205fe74aefa269e82f3ada281e, type: 3}
+    - {fileID: 4553023241709818365, guid: e9d7ee740a2b4707befd3c9e74afd852, type: 3}
+    - {fileID: -8915044864590846183, guid: e3d71019757f48198c82681231d1e98a, type: 3}
+    - {fileID: 8492580113678647092, guid: b8a44baeaf204a589b361eda27eb69a3, type: 3}
+    - {fileID: 8841493994563855036, guid: c23d185ec0c342e0a8a2731856e818fd, type: 3}
+    - {fileID: 409978106964746145, guid: c7f9e8c90b9a49bc934e17155e16190c, type: 3}
+    - {fileID: 5749287922953492849, guid: f6487dda8fe94274a5396db7db0bbcfa, type: 3}
+    - {fileID: 5144411363278504780, guid: 1d1cfe907ebe4351bc41ea91dd211acc, type: 3}
+    - {fileID: -8185920452926097499, guid: 7dbbe16c5a9d4f97aacbd73112ab0af2, type: 3}
+    - {fileID: 1328395123859608389, guid: 08aa5e65ff744514a0c1596ab95e3d78, type: 3}
+    - {fileID: -2226596818615867525, guid: db06830634064c5381679bc2484ad24a, type: 3}
+    - {fileID: 6181581489180930052, guid: 3957b2eadd974b51a6a710930b9ebf50, type: 3}
+    - {fileID: 3112575729605435074, guid: f033b80b59bd44e6867f96e2eca95b10, type: 3}
+    - {fileID: -5725684117282437636, guid: eb8269be3a024d5ba775b2b25b89ae41, type: 3}
+    - {fileID: 4894720594066381654, guid: c17386fb5203437392648f4680cfdcb7, type: 3}
+    - {fileID: -272094037939394198, guid: 58ffed4353074121925e30787bf0a594, type: 3}
+    - {fileID: 5872759942117342413, guid: 360516e24af8454c95c4cd591a4bcba7, type: 3}
+    - {fileID: -2805002311184330566, guid: 6bfaaf0383a346a1a3a674db2d4bbf9c, type: 3}
+    - {fileID: -3433745960509641807, guid: 50564968f96a4c2e9c3435dd1075870c, type: 3}
+    - {fileID: -944873670881212206, guid: bb063926e58e43ad896d9a86c5484bf1, type: 3}
+    - {fileID: -4336878629570323307, guid: 9c151ff939df4091a44916342baa98d5, type: 3}
+    - {fileID: -9050998528355194317, guid: bce6300a658b4b72977d4c2d4a7cdc48, type: 3}
+    - {fileID: -2733324671677400683, guid: d3b809ca8eb445268cb23cc6dcfd9fbd, type: 3}
+    - {fileID: -2288507286907467232, guid: 9a1ee210be0a4620859dc492f5469391, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Outfit
+    variants:
+    - {fileID: -4730732179805464352, guid: 371d6fae57454674a7d40445992fc007, type: 3}
+    - {fileID: 2762393130953239952, guid: e95a1ef065a448b0b8ded19723d7908e, type: 3}
+    - {fileID: -5869045368524034692, guid: 53567319f461438b8683a46b59ac3e77, type: 3}
+    - {fileID: -3835784894608035622, guid: 1f56a9ed7d664b48a7e90404a74b9b77, type: 3}
+    - {fileID: 8978027692764228879, guid: 468367e71b4448bb9fc83967d12adb54, type: 3}
+    - {fileID: 1895019277581709426, guid: 83b3f74a718347f4979ed29155509a50, type: 3}
+    - {fileID: -8671319135257936452, guid: 346f32ca224f42af9819596cdc83ecc6, type: 3}
+    - {fileID: 5817701751892692553, guid: ec896680b12d46b8869d99eec8ef1d55, type: 3}
+    - {fileID: 7019997056694631122, guid: 27f29a21929447118c50a4e926253345, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Outwear
+    variants:
+    - {fileID: -1532456528610276152, guid: 145f010ee07b45339188962e3c8d3f56, type: 3}
+    - {fileID: 2123510237897404618, guid: 52b473727d7e4b56a784af945848d66d, type: 3}
+    - {fileID: 1618030428257034439, guid: b0e3588fdd9d44da88f941fdc216e347, type: 3}
+    - {fileID: 4883349500120772387, guid: 8b706d202e5a45f2956740f6507b6057, type: 3}
+    - {fileID: -2922999397053272479, guid: be3d45339c7b4047865a965e21a336d0, type: 3}
+    - {fileID: -2632610103933194241, guid: 7865fa47ee1f4e4cbbea0a8be13bea95, type: 3}
+    - {fileID: 3893397441327756377, guid: 852ece9278be46a4ae94e8b4eb221221, type: 3}
+    - {fileID: 2476937670767102378, guid: 365ba6a2e23949aa947b520ce8aa9c7f, type: 3}
+    - {fileID: -24406301662055664, guid: 32eb5c27010f42c0a75b5e40c71493fa, type: 3}
+    - {fileID: 1568496718666516134, guid: 022f715ad6f24ff6a5543d390d475e86, type: 3}
+    - {fileID: -5334965028238235352, guid: 770cc7e740c14569a49166b631562b06, type: 3}
+    - {fileID: -1941315755242127908, guid: 1568d66f46cd4458bf3bf39a24caacc1, type: 3}
+    - {fileID: 5583457141203502510, guid: cf912334546744759b5f771f804989da, type: 3}
+    - {fileID: 173360045229902157, guid: a1f6051f52e74db78bfe1972a31da1d6, type: 3}
+    - {fileID: -4252726573205677373, guid: 738253f05a014354995243f33f3632c5, type: 3}
+    - {fileID: -5475035345663667210, guid: e2151f1bdef941ad95112cf32f65290b, type: 3}
+    - {fileID: -1675498736461941903, guid: 2e10c52395f64766a4937af0654fcc22, type: 3}
+    - {fileID: -4868618595432159515, guid: 7d807e4d33ce43d9b56e5e491d3691bf, type: 3}
+    - {fileID: -8623171834144889132, guid: 7eacc4713c854786ad085a2059096d07, type: 3}
+    - {fileID: 1940884522441778114, guid: f66801de78de49b2bb9e7342c26ccc29, type: 3}
+    - {fileID: -4716117921923428242, guid: b3cb1d61f0334bf99b44f58e19a95866, type: 3}
+    - {fileID: -2132572421233806358, guid: 13ce7451214b49fcabd867d87477c6b0, type: 3}
+    - {fileID: -659517482259900400, guid: df8ab01a63b64f959f4147046fbd37c8, type: 3}
+    - {fileID: 1968760371064887498, guid: 1a41b1369303438cbf3e6d97608e4693, type: 3}
+    - {fileID: -4510294680014572337, guid: 0577a99a397c446dae5131409c004895, type: 3}
+    - {fileID: 1855345057895913278, guid: 8cfdd94c394c4134a1ad278fcbb5f46b, type: 3}
+    - {fileID: -4017468072073212798, guid: a2f0a9c8a30643bfb3e133d5f3bebee2, type: 3}
+    - {fileID: 6605694911051472808, guid: 0a9ba75815234a18b0b521578c9e82cf, type: 3}
+    - {fileID: 2904517523187841740, guid: dc09311c7e4d4b2b89c74189e7832a06, type: 3}
+    - {fileID: 6505132413982343180, guid: f9d170a829714da1b567ee942b425266, type: 3}
+    - {fileID: -5499812695946702862, guid: 4ebe216578e84633b63c435d1923ec12, type: 3}
+    - {fileID: 5301924463788362199, guid: 2f1f325ec04f463098b1b464fee57c2a, type: 3}
+    - {fileID: -8658550727359755755, guid: acc833c4829f4840a1383b4f40c829b0, type: 3}
+    - {fileID: 8979221520803057980, guid: 8c7568d2cd1b44c0963825810076ec3d, type: 3}
+    - {fileID: 3768238556758918053, guid: cf5a1ea2ca58457e800fe54b95e07261, type: 3}
+    - {fileID: -2085069527224731559, guid: 74e7cfb15fcd44d39f8b475c9d622b37, type: 3}
+    - {fileID: -892372752429840191, guid: 1aecf5dc5e5a42389c7fa08404ff5682, type: 3}
+    - {fileID: 4041450190801534078, guid: 6e57074eb4e2476489598dd919720eea, type: 3}
+    - {fileID: 1701524089462867894, guid: 3a001c7255f44ae6a68158860c737359, type: 3}
+    - {fileID: 7661718776277763237, guid: 9fea08c9a34b4e1d84f35ac18f75d45b, type: 3}
+    - {fileID: -539793163709256351, guid: f3f513cf6d7f4b0da769c0a8afaf280d, type: 3}
+    - {fileID: 5361407183164805259, guid: 52bb24da69194a91932aba2769e73223, type: 3}
+    - {fileID: 5135299982800335756, guid: 2af50b4c22ca40eba6387b35411669a0, type: 3}
+    - {fileID: -3398781015691208601, guid: 082f4af4ac844868941bfcadadb6c1eb, type: 3}
+    - {fileID: -1492774269873788628, guid: 1af656fd4e7a4da294352319d59f6095, type: 3}
+    - {fileID: 7638629086974144586, guid: d69e93ef3c0c42a694df3d5b743fbd57, type: 3}
+    - {fileID: 8364156856940018890, guid: d01b212bf91c4bf3848c78e3cc912bce, type: 3}
+    - {fileID: -8403378129264588602, guid: 1564855f947b4abc89bee0f5c0faae62, type: 3}
+    - {fileID: -8284568862604944830, guid: c637fd406b40414b8a083811c3aa23c8, type: 3}
+    - {fileID: 3767840592038602502, guid: c9cb40c0246d4736a42c84e0b828dbf6, type: 3}
+    - {fileID: 5793696267515502957, guid: 6116dcc0a78846589e8598cf7036dc35, type: 3}
+    - {fileID: 5119188356753827462, guid: 0c81eb8fcbda42189fbf9a725e38147f, type: 3}
+    - {fileID: 4281991470629395468, guid: 002958278977474b9b6adaf4f7fa674e, type: 3}
+    - {fileID: 3448805834766719360, guid: ade01d77243949278a0d38b7fa5a09eb, type: 3}
+    - {fileID: 6126890402490453081, guid: 7025c98ac59e462a977bb3107ac9a707, type: 3}
+    - {fileID: 5601534883299807719, guid: ea908c2dbc12470aa9cc1aafcaf78f8d, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Pants
+    variants:
+    - {fileID: 1543909213277224155, guid: 095cb1232f3d47ae87e8dd48388d940c, type: 3}
+    - {fileID: -4976506252765098015, guid: 0d1c6eb445334e27a9aad588cdc06f8e, type: 3}
+    - {fileID: 5026729302019614723, guid: ea31523d3e0e46fe911741a919133d1b, type: 3}
+    - {fileID: -2406216502670586917, guid: e57239dde62f494494cc14ba53120e7f, type: 3}
+    - {fileID: 6956645931020787088, guid: 1d6976975297466a9ac0639133686fcc, type: 3}
+    - {fileID: -1289615888922266597, guid: 6df9dc9f630c42fc8337752820b30cbb, type: 3}
+    - {fileID: 4548281612387348609, guid: b457173154f541beb42d0dd5059f0185, type: 3}
+    - {fileID: 8960429996560823094, guid: 34cffa797e26451f905e68fd38bbe5b7, type: 3}
+    - {fileID: -8129361379744962023, guid: 49391d1bf37d4fc49ac9a391127403ed, type: 3}
+    - {fileID: 8634359377457026240, guid: aac03895640b4092a50537e7978eabf4, type: 3}
+    - {fileID: -6833425477436108569, guid: e63b468ad1114f329b8d3a3248d1b816, type: 3}
+    - {fileID: -1602216458834000358, guid: aa2cbef806ed4311aea1f0969d55bf47, type: 3}
+    - {fileID: -7174682663038085362, guid: a8fbd5f5290e450abc2c4220b99ba14b, type: 3}
+    - {fileID: 8365846181006807011, guid: c1a1f44e364547bfa6a56ca647ce35dc, type: 3}
+    - {fileID: 4122927898749119769, guid: 1d1fe36ffc624062884eba1672be2960, type: 3}
     alwaysOn: 0
     enableChance: 0.35
   - childName: Shoes
     variants:
-    - {fileID: -1419061772662269867, guid: fab4d5a6a74c437591b388ecc20b0667, type: 3}
-    - {fileID: -5648626978545720014, guid: 4bba9ab16b624951a701fdb3d42c0d29, type: 3}
-    - {fileID: 2990419855401034948, guid: b724463617f448db8e211f0873040421, type: 3}
-    - {fileID: 2525575882034029105, guid: cb2b769b6d1947c3b54838dae8433793, type: 3}
+    - {fileID: 4560160008616458455, guid: 1bfb8eae1d9949b89769cf91f968fec0, type: 3}
+    - {fileID: 696040094093694994, guid: 02ad95e5c17c40d58595877952510c2e, type: 3}
+    - {fileID: 2622311745758301297, guid: 4a78d17ad50b441e8f685c3ef9564d47, type: 3}
+    - {fileID: -4513934521764671426, guid: 6b10481b12994df395e9eb2bf2871b13, type: 3}
+    - {fileID: -8507966474864796032, guid: 6f5b9621b5e54b91a4414daed6bf7779, type: 3}
+    - {fileID: 5900903955829827036, guid: 25c67b7323d847c38f0e742014aed12e, type: 3}
+    - {fileID: 3899179701337655370, guid: cbcf510f955848d9998b265d20cfd60d, type: 3}
+    - {fileID: -5040264409126451942, guid: 1fc2bb2e471a47b58db15cf6988607f7, type: 3}
+    - {fileID: 3596370362380868383, guid: a5d2896a5dc64a29bf77309af3bd8806, type: 3}
+    - {fileID: -4013734355594090245, guid: 7850291f0c3349218c54f115d7d0af73, type: 3}
+    - {fileID: 4846916642008965142, guid: 2f6e69b098ef44f8b52fc1e7da6bf135, type: 3}
+    - {fileID: -585987090817485312, guid: 960c0a647abb45fca8f81c3e081d7909, type: 3}
+    - {fileID: -1242411980669244152, guid: c7b076cf287047dc8ee0ea9bb64fb7e3, type: 3}
+    - {fileID: 8822414061312891240, guid: 781ccab1dd1f412f941396dc88ffe8b1, type: 3}
+    - {fileID: -5178100211778524695, guid: 7dfe1759ea0b48809f250970f031a6ea, type: 3}
+    - {fileID: 3293909790813873304, guid: 7128c0d143e14eea95db300d24b3025f, type: 3}
+    - {fileID: -6260860148111143606, guid: bf76d55b95ed4ca181d468e104394b5c, type: 3}
+    - {fileID: 3887993829501521360, guid: 5ff72676d65c4898aea93de28e55ffd7, type: 3}
+    - {fileID: 5124325090560270018, guid: 5345ad791d85496e9df03591545282de, type: 3}
+    - {fileID: 282264812460033723, guid: 28eff3f1d51147abacc3d728c9fc621a, type: 3}
+    - {fileID: 1093122283024923084, guid: 1b1f31b24fe44ce69b825d06b8045ac8, type: 3}
+    - {fileID: 1989087924565745759, guid: 374c73fb22b84a35b987f67c7dbd9d55, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Shorts
+    variants:
+    - {fileID: -4413590476698634004, guid: 8e162965492f4872982d16c5d0b4679a, type: 3}
+    - {fileID: 1102237145150501971, guid: 8e928ec5be7f48c2910a84f9dce812d9, type: 3}
+    - {fileID: -1716648293456793974, guid: 92b1e2d458cd4756b1f8f3bca1c2870d, type: 3}
+    alwaysOn: 0
+    enableChance: 0.35
+  - childName: Socks
+    variants:
+    - {fileID: -316787438360196166, guid: 74d4d514d9f14511813fd16d9ef405f9, type: 3}
+    - {fileID: 444536841649352858, guid: f667c2761ce447de93b8d1ebd3927037, type: 3}
+    - {fileID: 5143207351824992811, guid: 564fb77339214f9cbad36ef4cc2a5721, type: 3}
     alwaysOn: 0
     enableChance: 0.35

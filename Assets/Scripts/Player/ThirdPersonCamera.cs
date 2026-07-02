@@ -55,6 +55,10 @@ namespace FriendSlop.Player
         [SerializeField]
         private float scopeFov = 25f;
 
+        // zoom level 2 (the AWP-style "click again to zoom further" step) narrows the FOV past scopeFov
+        [SerializeField]
+        private float scopeFovLevel2 = 12f;
+
         // how fast we blend in/out of the scope; higher = snappier
         [SerializeField]
         private float scopeBlendSpeed = 12f;
@@ -75,7 +79,8 @@ namespace FriendSlop.Player
         private NetworkPlayerController _player; // the followed player, for role-gating the scope
         private float _yaw;
         private float _pitch = 20f;
-        private float _scopeBlend; // 0 = third-person, 1 = fully scoped first-person
+        private float _scopeBlend; // 0 = third-person, 1 = fully scoped first-person (either zoom level)
+        private float _zoomFovBlend; // 0 = scopeFov, 1 = scopeFovLevel2. only matters while _scopeBlend > 0
 
         private void Awake() => _cam = GetComponent<Camera>();
 
@@ -83,7 +88,12 @@ namespace FriendSlop.Player
         public void SetTarget(Transform newTarget)
         {
             target = newTarget;
-            _eye = newTarget != null ? newTarget.Find("Eye") : null; // FP anchor, optional
+            // FP anchor, optional. search the whole subtree, not just direct children; the Eye is
+            // nested a couple levels down (Visual -> Character -> Eye), so Transform.Find("Eye") (direct
+            // children only) silently missed it and the camera fell back to target+targetOffset, sitting
+            // ~1.5 units above the real eye. that made the scoped view see over ledges the muzzle-height
+            // laser correctly could not, so sight-line and beam disagreed.
+            _eye = newTarget != null ? FindDeep(newTarget, "Eye") : null;
             // the followed transform may be the visual mesh child, so search parents for the controller
             _player = newTarget != null ? newTarget.GetComponentInParent<NetworkPlayerController>() : null;
 
@@ -115,15 +125,19 @@ namespace FriendSlop.Player
 
             Mouse mouse = Mouse.current;
 
-            // blend toward scoped (1) while right mouse is held, back to hip (0) when released. done
-            // before the look so this frame's sensitivity already reflects how scoped we are.
-            // only Snipers carry a scope; Criminals right-clicking does nothing (the scope overlay is a
-            // sniper tell, they shouldn't see it). Witness gets its own device later.
-            bool canScope = _player != null && _player.Role.Value == PlayerRole.Sniper;
-            bool scoping = canScope && mouse != null && mouse.rightButton.isPressed;
+            // zoom level (0 = hip, 1 = scoped, 2 = scoped further) is an AWP-style toggle owned by
+            // NetworkPlayerController; right-click cycles it there, this camera just reads the result.
+            // both zoom levels count as "scoped" for the blend (distance-in, sensitivity, overlay);
+            // only the FOV target differs between them (via _zoomFovBlend below).
+            int zoomLevel = _player != null ? _player.ZoomLevel : 0;
             _scopeBlend = Mathf.MoveTowards(
                 _scopeBlend,
-                scoping ? 1f : 0f,
+                zoomLevel > 0 ? 1f : 0f,
+                scopeBlendSpeed * Time.deltaTime
+            );
+            _zoomFovBlend = Mathf.MoveTowards(
+                _zoomFovBlend,
+                zoomLevel >= 2 ? 1f : 0f,
                 scopeBlendSpeed * Time.deltaTime
             );
 
@@ -137,9 +151,11 @@ namespace FriendSlop.Player
                 _pitch = Mathf.Clamp(_pitch, minPitch, maxPitch);
             }
 
-            // scoping pulls the camera in to distance 0 (first person) and narrows the fov
+            // scoping pulls the camera in to distance 0 (first person) and narrows the fov. fov blends
+            // through 3 targets: normal -> scopeFov (zoom 1) -> scopeFovLevel2 (zoom 2).
             float currentDistance = Mathf.Lerp(distance, 0f, _scopeBlend);
-            _cam.fieldOfView = Mathf.Lerp(normalFov, scopeFov, _scopeBlend);
+            float scopedFov = Mathf.Lerp(scopeFov, scopeFovLevel2, _zoomFovBlend);
+            _cam.fieldOfView = Mathf.Lerp(normalFov, scopedFov, _scopeBlend);
 
             if (scopeGroup != null)
             {
@@ -161,6 +177,21 @@ namespace FriendSlop.Player
             Vector3 focus = _eye != null ? _eye.position : target.position + targetOffset;
             transform.position = focus - rotation * Vector3.forward * currentDistance;
             transform.rotation = rotation;
+        }
+
+        // depth-first search of the whole subtree for a child by name (unlike Transform.Find, which only
+        // checks direct children). used to locate the Eye anchor nested under Visual -> Character -> Eye.
+        private static Transform FindDeep(Transform root, string childName)
+        {
+            if (root.name == childName)
+                return root;
+            foreach (Transform child in root)
+            {
+                Transform found = FindDeep(child, childName);
+                if (found != null)
+                    return found;
+            }
+            return null;
         }
 
         // drives a scope UI layer's alpha from the blend, enabling it on first use (it starts disabled

@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0093a455f5044b83ac7abc91973a9208, type: 3}
+  m_Name: HatsWithHairGroup
+  m_EditorClassIdentifier: 
+  Type: 10
+  Variants:
+  - {fileID: 919132149155446097, guid: c17386fb5203437392648f4680cfdcb7, type: 3}
+  - {fileID: 919132149155446097, guid: 58ffed4353074121925e30787bf0a594, type: 3}
+  - {fileID: 919132149155446097, guid: 360516e24af8454c95c4cd591a4bcba7, type: 3}
+  - {fileID: 919132149155446097, guid: 6bfaaf0383a346a1a3a674db2d4bbf9c, type: 3}
+  - {fileID: 919132149155446097, guid: 50564968f96a4c2e9c3435dd1075870c, type: 3}
+  - {fileID: 919132149155446097, guid: bb063926e58e43ad896d9a86c5484bf1, type: 3}
+  - {fileID: 919132149155446097, guid: 9c151ff939df4091a44916342baa98d5, type: 3}
+  - {fileID: 919132149155446097, guid: bce6300a658b4b72977d4c2d4a7cdc48, type: 3}
+  - {fileID: 919132149155446097, guid: d3b809ca8eb445268cb23cc6dcfd9fbd, type: 3}
+  - {fileID: 919132149155446097, guid: 9a1ee210be0a4620859dc492f5469391, type: 3}

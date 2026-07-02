@@ -111,7 +111,9 @@ namespace FriendSlop.Player
             if (!firePressed)
                 return;
 
-            if (requireScopeToFire && !mouse.rightButton.isPressed)
+            // sniper can only fire while scoped. right-click is now an AWP-style toggle (cycled in
+            // NetworkPlayerController), not a held button, so read the resulting state from there.
+            if (requireScopeToFire && !_controller.IsScoped)
                 return;
 
             // fire-rate gate: ignore the press if we're still cooling down from the last shot
