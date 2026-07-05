@@ -180,11 +180,14 @@ namespace FriendSlop.Player
                         // head = instant down; body = costs several hits. only score the kill on the blow
                         // that actually downs them (TakeHit returns true exactly once).
                         if (victim.TakeHit(zone))
+                        {
                             ScoreManager.Instance?.RecordCriminalKill(OwnerClientId);
+                            // if that downed the last criminal, end Hunt now rather than waiting out the clock
+                            GameFlowManager.Instance?.EndHuntIfNoCriminalsLeft();
+                        }
                     }
                     break;
                 case HitKind.Npc:
-                    Debug.Log($"[Shoot] client {OwnerClientId} hit an NPC (penalty)");
                     if (GameFlowManager.Instance != null && GameFlowManager.Instance.IsHunt)
                         ScoreManager.Instance?.RecordNpcHit(OwnerClientId);
                     // replicate the kill by index (the shared identity) so every machine fades out its own

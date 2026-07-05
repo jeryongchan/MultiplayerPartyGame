@@ -182,6 +182,30 @@ namespace FriendSlop.Crowd
                 npc.Kill();
         }
 
+        // down the NPC with this stream index on this machine (stop + lie down for the round). called on every
+        // machine from the criminal's replicated melee-steal RPC, so the same pedestrian goes down everywhere.
+        // a no-op if that index isn't currently live here.
+        public void DownNpc(int index)
+        {
+            if (_byIndex.TryGetValue(index, out var npc) && npc != null)
+                npc.Down();
+        }
+
+        // the appearance of NPC #index, regenerated from the shared seed rather than stored; appearance is a
+        // pure function of (seed, index) (see AppearanceRngFor), so the server can reproduce any
+        // NPC's look on demand with zero per-NPC storage. used by the criminal disguise-steal to read which
+        // hat/outwear that pedestrian is wearing. returns false if the crowd isn't streaming or has no catalog.
+        public bool TryGetAppearance(int index, out FriendSlop.Characters.PlayerAppearance appearance)
+        {
+            if (!_streaming || appearanceCatalog == null)
+            {
+                appearance = default;
+                return false;
+            }
+            appearance = FriendSlop.Characters.CharacterAppearanceApplier.Roll(appearanceCatalog, AppearanceRngFor(index));
+            return true;
+        }
+
         // instantiate NPC #index locally with its seed-derived traits and its clock-derived birth time.
         // every trait is a pure function of (seed, index), no runtime history, so a machine that joins
         // late and skips earlier indices still computes identical results.

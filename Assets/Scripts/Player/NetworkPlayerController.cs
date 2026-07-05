@@ -135,6 +135,11 @@ namespace FriendSlop.Player
         // owner. stays null in normal play. lets a test drive movement through the real input path.
         public Vector2? MoveInputOverride { get; set; }
 
+        // owner-only movement root: while true, OwnerTick feeds zero move input (same as the freeze path), so
+        // the player can't glide during an action that should plant them, e.g. a criminal's punch. set/cleared
+        // by CriminalMelee around the swing. physics (gravity/grounding) still runs on the zero input.
+        public bool MovementLocked { get; set; }
+
         // the current horizontal speed of the character. works on owner, server, and pure remotes.
         public float CurrentSpeed
         {
@@ -212,13 +217,9 @@ namespace FriendSlop.Player
                 TeleportTo(spawnPos);
                 _authoritativeState.Value = CaptureState(0);
 
-                // roll a look once, server-side, seeded by client id so a given player is stable across a
-                // re-spawn this session. replicated via the NetworkVariable; every copy paints from it.
-                if (appearanceCatalog != null)
-                {
-                    var rng = new System.Random(unchecked((int)OwnerClientId * 73856093) ^ (int)System.DateTime.Now.Ticks);
-                    Appearance.Value = CharacterAppearanceApplier.Roll(appearanceCatalog, rng);
-                }
+                // roll the initial look (round 0). re-rolled each round in RespawnForRole so a new round is
+                // a fresh character. replicated via the NetworkVariable; every copy paints from it.
+                RollAppearance(0);
             }
 
             if (IsOwner)
@@ -386,7 +387,8 @@ namespace FriendSlop.Player
             // frozen if the phase freezes everyone (SketchReveal cutscene) or this player is downed (a
             // spectating criminal can't move).
             bool frozen = (GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen)
-                || !IsAlive.Value;
+                || !IsAlive.Value
+                || MovementLocked; // e.g. rooted mid-punch so the criminal can't glide while swinging.
 
             Vector2 rawMove = frozen ? Vector2.zero : (MoveInputOverride ?? ReadMoveInput());
             var input = new InputPayload
@@ -555,7 +557,7 @@ namespace FriendSlop.Player
         // moves the player to the new role's spawn point and republishes authoritative state so owner
         // and remote copies both follow. under a real lobby (approach A) role is set before spawn, so
         // this re-teleport never fires, OnNetworkSpawn places the player correctly the first time.
-        public void RespawnForRole(PlayerRole role)
+        public void RespawnForRole(PlayerRole role, int round)
         {
             if (!IsServer)
                 return;
@@ -563,11 +565,23 @@ namespace FriendSlop.Player
             Role.Value = role;
             IsAlive.Value = true; // revive for the new round (mesh/hitbox re-show via OnValueChanged)
             _hp = bodyHitsToKill; // refill body HP for the new round
+            RollAppearance(round); // fresh look each round, a new character, not last round's outfit
             var spawnPos = SpawnPointManager.Instance != null
                 ? SpawnPointManager.Instance.GetSpawnPoint(role)
                 : DebugSpawnPosition((int)OwnerClientId);
             TeleportTo(spawnPos);
             _authoritativeState.Value = CaptureState(_authoritativeState.Value.Tick);
+        }
+
+        // server-only. roll this player's replicated appearance for the given round, seeded by (clientId,
+        // round) so it's deterministic (reproducible/debuggable) yet genuinely different each round; mixing
+        // the round in is what stops it re-rolling the identical outfit. every copy repaints via OnValueChanged.
+        private void RollAppearance(int round)
+        {
+            if (appearanceCatalog == null)
+                return;
+            int seed = unchecked((int)OwnerClientId * 73856093 ^ round * 19349663);
+            Appearance.Value = CharacterAppearanceApplier.Roll(appearanceCatalog, new System.Random(seed));
         }
 
         // server-only. mark this player down (or revive). down players hide their mesh + hitbox (so they

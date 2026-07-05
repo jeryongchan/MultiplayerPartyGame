@@ -62,12 +62,13 @@ namespace FriendSlop.Player
             var clientId = rpcParams.Receive.SenderClientId;
             _roles[clientId] = role;
 
-            // approach B: re-teleport the already-spawned player to the new role's spawn point
+            // approach B: re-teleport the already-spawned player to the new role's spawn point. debug
+            // re-spawn (not a round advance), so round 0 for appearance; the match flow re-rolls per round.
             if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
                 && client.PlayerObject != null
                 && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
             {
-                controller.RespawnForRole(role);
+                controller.RespawnForRole(role, 0);
             }
         }
 
@@ -97,11 +98,11 @@ namespace FriendSlop.Player
             // rotate the Witness within the hunter team; every other hunter is a Sniper
             int witnessIdx = _hunters.Count > 0 ? roundOffset % _hunters.Count : 0;
             for (int i = 0; i < _hunters.Count; i++)
-                ApplyRole(_hunters[i], i == witnessIdx ? PlayerRole.Witness : PlayerRole.Sniper);
+                ApplyRole(_hunters[i], i == witnessIdx ? PlayerRole.Witness : PlayerRole.Sniper, roundOffset);
 
-            // criminals never change
+            // criminals keep their team, but re-roll their look for the new round (pass the round)
             foreach (var c in _criminals)
-                ApplyRole(c, PlayerRole.Criminal);
+                ApplyRole(c, PlayerRole.Criminal, roundOffset);
         }
 
         // minimal one-time split: order by id, first (1 + (N-1)/2) become hunters, the rest criminals.
@@ -130,15 +131,16 @@ namespace FriendSlop.Player
         // is this client on the hunter team this match? (read after teams are built)
         public bool IsHunterTeam(ulong clientId) => _hunters.Contains(clientId);
 
-        // record the role and apply it through the same door SetRoleRpc uses (re-teleport the live player)
-        private void ApplyRole(ulong clientId, PlayerRole role)
+        // record the role and apply it through the same door SetRoleRpc uses (re-teleport the live player).
+        // round threads through to appearance so each round re-rolls a fresh look.
+        private void ApplyRole(ulong clientId, PlayerRole role, int round)
         {
             _roles[clientId] = role;
             if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
                 && client.PlayerObject != null
                 && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
             {
-                controller.RespawnForRole(role);
+                controller.RespawnForRole(role, round);
             }
         }
     }

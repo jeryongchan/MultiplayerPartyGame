@@ -40,10 +40,73 @@ namespace FriendSlop.Crowd
         private float speed = 1.4f; // ~human walking pace
         public float Speed => speed;
 
+        // Actual ground speed this frame (metres/sec), measured from real movement. Drops to ~0 while
+        // loitering, so the Animator can blend to idle instead of moonwalking in place. Mirrors the
+        // player's CurrentSpeed so PlayerAnimationHandler can treat NPCs the same as players.
+        public float CurrentSpeed { get; private set; }
+
         [Header("Facing")]
         // how fast the NPC turns to face its travel direction, deg/sec
         [SerializeField]
         private float turnSpeed = 360f;
+
+        [Header("Sway (organic walk)")]
+        // chance [0,1] this NPC sways at all during its walk. rolled from (seed, index) so it's the same
+        // on every machine; some NPCs weave, others walk straight. 0 disables sway entirely.
+        [Range(0f, 1f)]
+        [SerializeField]
+        private float swayChance = 0.6f;
+
+        // smooth side-to-side weave around the path, so the NPC doesn't walk a robotic straight line.
+        // a deterministic sine of (time, phase), not per-frame randomness, so every machine agrees.
+        // amplitude in metres; 0 disables.
+        [SerializeField]
+        private float swayAmplitude = 0.12f;
+
+        // sway oscillations per second. slow = a gentle amble; fast = a nervous weave.
+        [SerializeField]
+        private float swayFrequency = 0.6f;
+
+        [Header("Loiter (mid-path pause)")]
+        // chance [0,1] this NPC loiters once during its walk. rolled from (seed, index) so it's the same
+        // on every machine. 0 disables loitering entirely.
+        [Range(0f, 1f)]
+        [SerializeField]
+        private float loiterChance = 0.3f;
+
+        // how long a loitering NPC stands still, seconds. it freezes its path progress for this long, then
+        // resumes, so total walk time is longer but the route is unchanged.
+        [SerializeField]
+        private float loiterDuration = 3f;
+
+        [Header("Drift (diagonal weave)")]
+        // chance [0,1] this NPC drifts diagonally, in segments: walk straight a while, then angle off to one
+        // side (like a player holding W+A), then straighten, repeat. rolled from (seed, index). 0 disables.
+        [Range(0f, 1f)]
+        [SerializeField]
+        private float driftChance = 0.4f;
+
+        // how far to one side a full diagonal reaches, metres. the lateral offset ramps toward this.
+        [SerializeField]
+        private float driftAmplitude = 0.5f;
+
+        // seconds of each straight/diagonal segment. one drift cycle = straight for this long, then diagonal
+        // for this long. kept simple: one knob for both segments.
+        [SerializeField]
+        private float driftSegmentDuration = 2.5f;
+
+        // per-NPC sway/loiter/drift plans, derived once from the stream index so they're identical on every
+        // machine. _sways/_drifts = won that roll; -1 loiterStart = "doesn't loiter this run".
+        private bool _sways;
+        private float _swayPhase;
+        private float _loiterStartDist = -1f;
+        private bool _drifts;
+        private float _driftSign = 1f; // which side this NPC drifts toward first (+right / -left)
+
+        // last frame's final position (incl. drift/sway), so facing can follow actual motion rather than the
+        // raw path tangent. _hasLastPos guards the first frame where there's no previous position yet.
+        private Vector3 _lastPos;
+        private bool _hasLastPos;
 
         // the path centerline, snapshotted as world positions. we deliberately do not read live Transforms
         // each frame: the NPC moves itself, and a parented waypoint would be dragged along into a feedback
@@ -75,6 +138,12 @@ namespace FriendSlop.Crowd
         // event layered on top of the deterministic crowd, so it must be explicitly replicated.
         private bool _dying;
 
+        // once robbed by a criminal, the NPC stops walking and lies down where it fell, staying there for the
+        // rest of the round (evidence + cover). like _dying it's a live reactive override on the pure-function
+        // crowd, set on every machine via the downed RPC, but unlike a kill it does not despawn.
+        private bool _downed;
+        public bool Downed => _downed;
+
         // precomputed cumulative arc-length at each waypoint (index i = distance from start to waypoint i),
         // plus the total loop length. built once so P(t) maps time -> distance -> segment in O(segments).
         private float[] _cumulative;
@@ -98,6 +167,18 @@ namespace FriendSlop.Crowd
             _direction = forward ? 1f : -1f;
             _birthTime = birthTime;
             BuildPath(points);
+
+            // derive sway phase + loiter plan from the index so they're deterministic (same on every
+            // machine, at any join time), never from per-frame Random, which would desync the crowd.
+            var rng = new System.Random(index * 73856093);
+            _sways = rng.NextDouble() < swayChance;
+            _swayPhase = (float)rng.NextDouble() * Mathf.PI * 2f;
+            if (rng.NextDouble() < loiterChance && _totalLength > 0f)
+                // loiter somewhere in the middle 60% of the walk (not right at the ends)
+                _loiterStartDist = _totalLength * (0.2f + (float)rng.NextDouble() * 0.6f);
+            _drifts = rng.NextDouble() < driftChance;
+            _driftSign = rng.NextDouble() < 0.5 ? 1f : -1f;
+
             _initialized = true;
 
             // place at the path start immediately, so the NPC never renders for one frame at the prefab's
@@ -149,9 +230,9 @@ namespace FriendSlop.Crowd
 
         private void Update()
         {
-            // while dying, the fade coroutine owns this NPC: it's frozen in place (a shot pedestrian
-            // doesn't keep strolling), so skip all path motion until it despawns.
-            if (_dying || _totalLength <= 0f)
+            // while dying (shot, fade) or downed (robbed, lying on the pavement) the NPC is frozen: it no
+            // longer strolls the path, so skip all path motion. _dying despawns; _downed stays for the round.
+            if (_dying || _downed || _totalLength <= 0f)
                 return;
 
             // the shared clock. NetworkManager.ServerTime.Time is synchronized across host and clients
@@ -168,6 +249,20 @@ namespace FriendSlop.Crowd
             // frame (the tangent vanishes and a reversed NPC's clamp would snap to the far terminus). the
             // manager despawns it next frame.
             float travelled = (float)(now - _birthTime) * speed;
+
+            // loiter: once the NPC reaches its loiter point, hold there for loiterDuration by subtracting
+            // the paused distance from travelled. purely a function of the clock + the seeded plan, so
+            // every machine pauses the same NPC at the same spot for the same time.
+            bool loitering = false;
+            if (_loiterStartDist >= 0f && travelled > _loiterStartDist)
+            {
+                float pastLoiter = travelled - _loiterStartDist;
+                float loiterDist = loiterDuration * speed; // distance "spent" standing still
+                // still inside the pause window if we haven't yet "spent" the full loiter distance
+                loitering = pastLoiter < loiterDist;
+                travelled = _loiterStartDist + Mathf.Max(0f, pastLoiter - loiterDist);
+            }
+
             if (travelled >= _totalLength)
             {
                 Finished = true;
@@ -176,12 +271,53 @@ namespace FriendSlop.Crowd
 
             float clamped = Mathf.Clamp(travelled, 0f, _totalLength);
             Vector3 pos = EvaluatePosition(clamped);
+
+            // sway and drift both nudge sideways along the path's right vector, so compute it once from the
+            // travel direction. both are deterministic functions of the shared clock (+ seeded plan), never
+            // per-frame Random, so they stay identical on every machine.
+            Vector3 ahead = EvaluatePosition(Mathf.Min(clamped + 0.1f, _totalLength)) - pos;
+            ahead.y = 0f;
+            // skip sway/drift entirely while loitering, otherwise the clock-driven sideways nudge keeps
+            // the NPC micro-moving (CurrentSpeed > 0), so the Animator never blends to idle.
+            if (!loitering && ahead.sqrMagnitude > 1e-6f)
+            {
+                ahead.Normalize();
+                Vector3 right = new Vector3(ahead.z, 0f, -ahead.x);
+
+                // sway: a smooth continuous weave around the path centerline
+                if (_sways && swayAmplitude > 0f)
+                {
+                    float s = Mathf.Sin((float)now * swayFrequency * Mathf.PI * 2f + _swayPhase);
+                    pos += right * (s * swayAmplitude);
+                }
+
+                // drift: segmented diagonal. each cycle = one straight leg then one diagonal leg, the
+                // diagonal side flipping every cycle. a triangle ramp over the diagonal leg makes the NPC
+                // angle off to the side (like holding W+A) and back, rather than snapping.
+                if (_drifts && driftAmplitude > 0f && driftSegmentDuration > 0f)
+                {
+                    float cycle = driftSegmentDuration * 2f;
+                    float t = Mathf.Repeat((float)now, cycle); // 0..cycle
+                    float side = (Mathf.Floor((float)now / cycle) % 2f == 0f) ? 1f : -1f;
+                    float ramp = t < driftSegmentDuration
+                        ? 0f // straight segment
+                        : Mathf.Sin((t - driftSegmentDuration) / driftSegmentDuration * Mathf.PI); // 0->1->0 diagonal
+                    pos += right * (ramp * side * _driftSign * driftAmplitude);
+                }
+            }
+
+            // face where the NPC actually moves this frame (final pos incl. drift/sway), not the raw path
+            // tangent, otherwise a drifting NPC faces the clean centerline while sliding sideways, which
+            // reads as facing the wrong way. delta of consecutive final positions captures the true heading.
+            Vector3 dir = _hasLastPos ? pos - _lastPos : Vector3.zero;
+            _lastPos = pos;
+            _hasLastPos = true;
+
+            // real speed this frame, so the Animator idles during loiter instead of walking on the spot
+            CurrentSpeed = Time.deltaTime > 0f ? dir.magnitude / Time.deltaTime : 0f;
+
             transform.position = pos;
 
-            // facing from the path tangent: sample a small step in the direction of travel so we point
-            // along the walk. distanceAlong increases as the NPC advances (for both forward and reversed,
-            // since EvaluatePosition already maps the reversal), so +step is always "ahead".
-            Vector3 dir = EvaluatePosition(Mathf.Min(clamped + 0.1f, _totalLength)) - pos;
             dir.y = 0f;
             if (dir.sqrMagnitude > 1e-6f)
             {
@@ -207,6 +343,21 @@ namespace FriendSlop.Crowd
                 return;
             _dying = true;
             StartCoroutine(FadeAndFinish());
+        }
+
+        // react to being robbed by a criminal: stop walking and lie down where you fell, staying put for the
+        // rest of the round (a body on the pavement is evidence + cover). called on every machine via the
+        // downed RPC on its own NPC #index, so the same pedestrian goes down everywhere. idempotent, and a
+        // no-op if the NPC is already dying (a shot wins). does not set Finished, a downed NPC is not despawned.
+        //
+        // the actual fall/lay animation is driven by PlayerAnimationHandler reading Downed; here we just
+        // flip the flag and zero the speed so it blends out of walking.
+        public void Down()
+        {
+            if (_dying || _downed)
+                return;
+            _downed = true;
+            CurrentSpeed = 0f;
         }
 
         private System.Collections.IEnumerator FadeAndFinish()

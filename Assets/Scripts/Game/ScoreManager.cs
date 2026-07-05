@@ -75,6 +75,22 @@ namespace FriendSlop.Game
             });
         }
 
+        // a criminal reached the Exit and escaped the street (GDD Resolution: "criminal reaches exit
+        // gives +1 criminal team"). scored the same as surviving to the end, the criminal got away, so it
+        // reuses the survival counter/points. the caller removes the escapee (SetAlive(false)) right after,
+        // which also stops AwardSurvivors from awarding them a second time at Hunt's end.
+        public void RecordCriminalEscape(ulong criminalClientId)
+        {
+            if (!IsServer)
+                return;
+            Mutate(criminalClientId, s =>
+            {
+                s.Survivals += 1;
+                s.Total += survivalPoints;
+                return s;
+            });
+        }
+
         // end-of-Hunt survival award. called on entering Resolution: every criminal still alive gets
         // +survivalPoints. reads live players so it needs no per-round bookkeeping here.
         public void AwardSurvivors()

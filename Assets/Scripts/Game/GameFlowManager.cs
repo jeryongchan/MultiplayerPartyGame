@@ -111,6 +111,30 @@ namespace FriendSlop.Game
                 EnterPhase(NextPhase(CurrentPhase.Value));
         }
 
+        // server-only. end Hunt early once no criminals are left in play; every one has been eliminated or
+        // has escaped (GDD Resolution: "round ends when all criminals are out, eliminated, or time expires").
+        // a no-op outside Hunt or while a live criminal remains. call after any event that removes a criminal
+        // (a confirmed kill, an exit escape); the normal timer still ends Hunt if criminals are still around.
+        public void EndHuntIfNoCriminalsLeft()
+        {
+            if (!IsServer || CurrentPhase.Value != GamePhase.Hunt)
+                return;
+            if (AnyCriminalStillInPlay())
+                return;
+            EnterPhase(GamePhase.Resolution);
+        }
+
+        // server-side truth: is any criminal still alive (not killed, not escaped)? escapees are SetAlive(false)
+        // just like the dead, so both drop out of this scan and the last one leaving ends the round.
+        private bool AnyCriminalStillInPlay()
+        {
+            foreach (var kv in NetworkManager.Singleton.SpawnManager.SpawnedObjects)
+                if (kv.Value.TryGetComponent(out NetworkPlayerController pc)
+                    && pc.Role.Value == PlayerRole.Criminal && pc.IsAlive.Value)
+                    return true;
+            return false;
+        }
+
         // the linear progression. Resolution loops back to RoleAssign (with a rotated round) rather than
         // returning to Lobby, so the match keeps cycling rounds until we add a match-end condition.
         private static GamePhase NextPhase(GamePhase phase) => phase switch
