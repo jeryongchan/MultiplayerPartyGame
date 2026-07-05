@@ -90,6 +90,15 @@ namespace FriendSlop.Player
         public readonly NetworkVariable<bool> IsAlive =
             new NetworkVariable<bool>(true, writePerm: NetworkVariableWritePermission.Server);
 
+        // how many body hits it takes to down this player. a head hit is always an instant kill regardless.
+        // server-only tuning; exposed so you can tweak survivability in the Inspector while testing.
+        [SerializeField]
+        private int bodyHitsToKill = 3;
+
+        // remaining body hits before this player goes down, server-side only (never networked; clients don't
+        // need the number, only the resulting IsAlive flip). refilled to bodyHitsToKill on spawn/respawn.
+        private int _hp;
+
         // this player's randomized look, rolled once by the server on spawn and replicated to every copy as
         // a small index struct (never mesh data). each machine paints its own character mesh from it via
         // the shared catalog. server-write like Role; read and applied by all.
@@ -196,6 +205,7 @@ namespace FriendSlop.Player
                     ? RoleRegistry.Instance.GetRole(OwnerClientId)
                     : PlayerRole.Sniper;
                 Role.Value = role;
+                _hp = bodyHitsToKill; // start the round at full body HP.
                 var spawnPos = SpawnPointManager.Instance != null
                     ? SpawnPointManager.Instance.GetSpawnPoint(role)
                     : DebugSpawnPosition((int)OwnerClientId);
@@ -552,6 +562,7 @@ namespace FriendSlop.Player
 
             Role.Value = role;
             IsAlive.Value = true; // revive for the new round (mesh/hitbox re-show via OnValueChanged)
+            _hp = bodyHitsToKill; // refill body HP for the new round
             var spawnPos = SpawnPointManager.Instance != null
                 ? SpawnPointManager.Instance.GetSpawnPoint(role)
                 : DebugSpawnPosition((int)OwnerClientId);
@@ -564,8 +575,34 @@ namespace FriendSlop.Player
         // by NetworkShooter when a criminal is hit during Hunt.
         public void SetAlive(bool alive)
         {
-            if (IsServer)
-                IsAlive.Value = alive;
+            if (!IsServer)
+                return;
+            IsAlive.Value = alive;
+            if (alive)
+                _hp = bodyHitsToKill; // reviving refills body HP
+        }
+
+        // server-only. apply one hit in the given zone. a head hit downs instantly; a body hit decrements
+        // HP and only downs at zero. returns true if this hit was the killing blow (so the caller can
+        // score the kill exactly once). no-ops if already down. body HP refills on respawn/SetAlive(true).
+        public bool TakeHit(HitZone zone)
+        {
+            if (!IsServer || !IsAlive.Value)
+                return false;
+
+            if (zone == HitZone.Head)
+            {
+                IsAlive.Value = false;
+                return true;
+            }
+
+            _hp--;
+            if (_hp <= 0)
+            {
+                IsAlive.Value = false;
+                return true;
+            }
+            return false; // survived, a body hit that didn't kill
         }
 
         // runs on every copy when IsAlive flips: show/hide the mesh + shootable hitbox

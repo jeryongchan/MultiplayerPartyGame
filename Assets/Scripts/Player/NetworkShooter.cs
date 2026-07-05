@@ -167,15 +167,20 @@ namespace FriendSlop.Player
             switch (kind)
             {
                 case HitKind.Player:
-                    Debug.Log($"[Shoot] client {OwnerClientId} hit client {player.OwnerClientId}");
+                    // which zone was struck: a head collider is lethal, any other bone is a body hit.
+                    // defaults to Body if the collider somehow lacks a BoneHitbox marker.
+                    HitZone zone = hit.collider.GetComponent<BoneHitbox>() is { } bh ? bh.Zone : HitZone.Body;
+                    Debug.Log($"[Shoot] client {OwnerClientId} hit client {player.OwnerClientId} ({zone})");
                     // a hit only scores/downs during Hunt, and only against a criminal who's still up
                     // (hitting a fellow hunter, or anyone outside Hunt, does nothing but drop a marker)
                     if (GameFlowManager.Instance != null && GameFlowManager.Instance.IsHunt
                         && player.TryGetComponent(out NetworkPlayerController victim)
                         && victim.Role.Value == PlayerRole.Criminal && victim.IsAlive.Value)
                     {
-                        victim.SetAlive(false); // down them: hide mesh + hitbox, freeze their input
-                        ScoreManager.Instance?.RecordCriminalKill(OwnerClientId);
+                        // head = instant down; body = costs several hits. only score the kill on the blow
+                        // that actually downs them (TakeHit returns true exactly once).
+                        if (victim.TakeHit(zone))
+                            ScoreManager.Instance?.RecordCriminalKill(OwnerClientId);
                     }
                     break;
                 case HitKind.Npc:
