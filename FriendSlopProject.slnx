@@ -1,4 +1,5 @@
 ﻿<Solution>
+  <Project Path="ithappy.Cute_Characters.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Assembly-CSharp-Editor.csproj" />
 </Solution>
