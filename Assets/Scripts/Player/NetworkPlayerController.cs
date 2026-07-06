@@ -114,7 +114,15 @@ namespace FriendSlop.Player
         private bool _jumpLatched;
         private int _currentTick;
         private float _lastSimulatedSpeed;
-        private bool _lastSimulatedScoped;
+        private CharacterPose _lastSimulatedPose;
+
+        // owner-only: the criminal's currently-selected exotic pose (sticky, held until changed). number
+        // keys set it in Update; OwnerTick folds it into InputPayload.Pose. scope (a hunter pose) is chosen
+        // separately via _zoomLevel and doesn't touch this; the two never coexist (a criminal can't scope,
+        // a hunter has no exotic poses), so the single CurrentPose enum resolves cleanly in Simulate.
+        private CharacterPose _selectedPose = CharacterPose.None;
+        private bool _poseKeyPressed;
+        private CharacterPose _poseKeyValue;
 
         // owner-only: right-click cycles hip(0) -> zoom1(1) -> zoom2(2) -> hip(0), AWP-style toggle
         // instead of hold-to-scope. zoom level 1 and 2 both count as "scoped" for gameplay (movement
@@ -170,19 +178,25 @@ namespace FriendSlop.Player
         // owner, server, and pure remotes.
         public bool IsSprinting => CurrentSpeed > (moveSpeed + 0.1f);
 
-        // true while this player is scoped in (aiming). works on owner, server, and pure remotes;
-        // remotes read it from the replicated StatePayload, same as position/rotation.
-        public bool IsScoped
+        // this player's current deliberate pose (aim / exotic / none), layered over locomotion. works on
+        // owner, server, and pure remotes; remotes read it from the replicated StatePayload, same as
+        // position/rotation. the single source of truth for both the aim stance and the exotic poses; drives
+        // the Animator on every copy (server included) so per-bone hitboxes are posed for correct rewind.
+        public CharacterPose CurrentPose
         {
             get
             {
                 bool iSimulateThis = IsOwner || IsServer;
                 if (iSimulateThis)
-                    return _lastSimulatedScoped;
+                    return _lastSimulatedPose;
 
-                return _snapTo?.State.Scoped ?? false;
+                return _snapTo?.State.Pose ?? CharacterPose.None;
             }
         }
+
+        // true while this player is scoped in (aiming), a thin shim over CurrentPose so the
+        // camera, shooter, and gun-grip readers don't all have to learn the enum. scoped is just one pose.
+        public bool IsScoped => CurrentPose == CharacterPose.Scoped;
 
         // remote entity-interpolation: keep the two most recent snapshots. each frame, render the
         // mesh at (now - interpolationDelay) by lerping between them, ~one tick in the past, so
@@ -314,10 +328,23 @@ namespace FriendSlop.Player
                     _jumpLatched = true;
 
                 // right-click cycles the zoom level (edge event, like Jump). only Snipers can scope,
-                // a Criminal's right-click stays a no-op, same gating ReadScoped() already enforced.
+                // a Criminal's right-click stays a no-op, same gating ResolvePose() already enforces.
                 var mouse = UnityEngine.InputSystem.Mouse.current;
                 if (mouse != null && mouse.rightButton.wasPressedThisFrame && Role.Value.IsHunter())
                     _zoomCyclePressed = true;
+
+                // criminal exotic poses: number keys sticky-toggle a pose (press to enter, press the same key
+                // or 0 to stand). edge-caught here, consumed in OwnerTick -> InputPayload.Pose. only the
+                // Criminal poses; the server re-checks the role in Simulate so a hacked client can't pose as a
+                // hunter (and can't scope-via-pose either). 0 clears back to None. (RolePickerDebug moved to
+                // F1/F2 so the number row is free here; swap to a radial menu when that picker is deleted.)
+                if (kb != null && Role.Value == PlayerRole.Criminal)
+                {
+                    if (kb.digit1Key.wasPressedThisFrame) TogglePose(CharacterPose.Handstand);
+                    else if (kb.digit2Key.wasPressedThisFrame) TogglePose(CharacterPose.Shoelace);
+                    else if (kb.digit3Key.wasPressedThisFrame) TogglePose(CharacterPose.Split);
+                    else if (kb.digit0Key.wasPressedThisFrame) { _poseKeyPressed = true; _poseKeyValue = CharacterPose.None; }
+                }
             }
             InterpolateTransform();
         }
@@ -378,6 +405,13 @@ namespace FriendSlop.Player
                 _zoomCyclePressed = false;
             }
 
+            // consume the pose-key edge caught in Update: sticky toggle (same key again returns to stand)
+            if (_poseKeyPressed)
+            {
+                _selectedPose = _selectedPose == _poseKeyValue ? CharacterPose.None : _poseKeyValue;
+                _poseKeyPressed = false;
+            }
+
             int tick = _currentTick;
 
             // hard input-freeze during the reporter cutscene (SketchReveal): the owner sends empty
@@ -396,7 +430,7 @@ namespace FriendSlop.Player
                 Tick = tick,
                 MoveDir = CameraRelativeDirection(rawMove),
                 Jump = !frozen && _jumpLatched,
-                Scoped = !frozen && ReadScoped(),
+                Pose = frozen ? CharacterPose.None : ResolvePose(),
                 AimDir = CameraForward(),
                 Sprinting = !frozen && ReadSprintInput(),
             };
@@ -493,26 +527,38 @@ namespace FriendSlop.Player
             // place the controller at the state we're stepping from
             ApplyState(state);
 
+            // authority re-check: the pose is a role-gated ability, so sanitize the client's claimed pose
+            // against its server-known role. a hacked criminal can't send Scoped (a hunter stance), and a
+            // hacked hunter can't send an exotic pose. runs identically on owner + server (owner's Role is
+            // the same replicated value), so prediction matches authority and never reconcile-fights.
+            CharacterPose pose = SanitizePose(input.Pose);
+
             if (_controller.isGrounded && _verticalVelocity < 0f)
                 _verticalVelocity = -2f;
             if (input.Jump && _controller.isGrounded)
                 _verticalVelocity = Mathf.Sqrt(2f * -gravity * jumpHeight);
             _verticalVelocity += gravity * dt;
 
-            // only allow sprinting if we have actual movement input, and we are not scoped
-            float currentSpeed = (input.Sprinting && !input.Scoped && input.MoveDir.sqrMagnitude > 0.001f) ? sprintSpeed : moveSpeed;
+            // poses don't change the walk speed, a criminal still moves freely (and jumps) in any pose (GDD:
+            // "exotic poses are maintained mid-air"). but sprint is disallowed while posed: scoped (a sniper
+            // stance) and the exotic poses both block it, so a posed criminal moves only at walk speed. any
+            // non-None pose means no sprint.
+            bool posed = pose != CharacterPose.None;
+            float currentSpeed = (input.Sprinting && !posed && input.MoveDir.sqrMagnitude > 0.001f) ? sprintSpeed : moveSpeed;
 
-            // track speed + scope for animation (owner/server side)
+            // track speed + pose for animation (owner/server side)
             _lastSimulatedSpeed = input.MoveDir.sqrMagnitude > 0.001f ? currentSpeed : 0f;
-            _lastSimulatedScoped = input.Scoped;
+            _lastSimulatedPose = pose;
 
             Vector3 velocity = input.MoveDir * currentSpeed + Vector3.up * _verticalVelocity;
             _controller.Move(velocity * dt);
 
-            // facing: scoped faces the aim direction (body points where you shoot, A/D strafe relative
-            // to it); hip faces the movement direction (turn-to-move). movement is camera-relative in
-            // both, only what the body turns toward changes.
-            Vector3 faceDir = input.Scoped ? input.AimDir : input.MoveDir;
+            // facing: scoped faces the aim direction (so the body points where you shoot, and A/D
+            // strafe relative to it). otherwise faces the movement direction (turn-to-move). movement itself
+            // is camera-relative in both; only what the body turns toward changes. exotic poses use
+            // movement-facing (they're not aim stances).
+            bool scoped = pose == CharacterPose.Scoped;
+            Vector3 faceDir = scoped ? input.AimDir : input.MoveDir;
 
             Quaternion rotation = transform.rotation;
             if (faceDir.sqrMagnitude > 0.001f)
@@ -528,7 +574,7 @@ namespace FriendSlop.Player
                 Position = transform.position,
                 Rotation = rotation,
                 VerticalVelocity = _verticalVelocity,
-                Scoped = input.Scoped,
+                Pose = pose,
             };
         }
 
@@ -582,6 +628,50 @@ namespace FriendSlop.Player
                 return;
             int seed = unchecked((int)OwnerClientId * 73856093 ^ round * 19349663);
             Appearance.Value = CharacterAppearanceApplier.Roll(appearanceCatalog, new System.Random(seed));
+        }
+
+        // server-only. steal one garment from source (an NPC's look) into this player's, the
+        // criminal's disguise-steal. which slot is taken is chosen from pool seeded by
+        // seed (the NPC index), so the same NPC always yields the same piece on every
+        // machine, deterministic, no networking. taking one piece per punch (not the whole outfit) keeps the
+        // disguise from being too strong, so the sketch phase still matters: a full look takes several NPCs.
+        //
+        // only that one slot changes; the rest of this player's look is kept. writes the replicated Appearance,
+        // so every copy repaints via OnValueChanged (zero mesh bandwidth, just the index struct). no-op off
+        // the server. names not found in the catalog are skipped when narrowing the pool.
+        //
+        // returns the catalog slot index that was stolen, or -1 if nothing was (so the caller can tell the
+        // NPC which garment to remove). the pick is deterministic in seed.
+        public int StealOneGarment(PlayerAppearance source, int seed, params string[] pool)
+        {
+            if (!IsServer || appearanceCatalog == null || !source.IsValid || pool == null || pool.Length == 0)
+                return -1;
+
+            var slots = appearanceCatalog.Slots;
+
+            // resolve the pool names to valid catalog slot indices (skip any missing / out of range)
+            var candidates = new System.Collections.Generic.List<int>(pool.Length);
+            foreach (var name in pool)
+            {
+                int idx = System.Array.FindIndex(slots, s => s.childName == name);
+                if (idx >= 0 && idx < source.slots.Length)
+                    candidates.Add(idx);
+            }
+            if (candidates.Count == 0)
+                return -1;
+
+            // pick one candidate slot, seeded by the NPC index so it's the same everywhere and per-NPC stable
+            int pick = candidates[new System.Random(seed * 83492791).Next(candidates.Count)];
+
+            // start from this player's current look so we overwrite only the stolen slot
+            var current = Appearance.Value.IsValid && Appearance.Value.slots != null
+                ? (sbyte[])Appearance.Value.slots.Clone()
+                : new sbyte[appearanceCatalog.SlotCount];
+            if (pick < current.Length)
+                current[pick] = source.slots[pick]; // copy the NPC's variant for this one slot (may be Hidden)
+
+            Appearance.Value = new PlayerAppearance(current);
+            return pick;
         }
 
         // server-only. mark this player down (or revive). down players hide their mesh + hitbox (so they
@@ -674,12 +764,35 @@ namespace FriendSlop.Player
             return new Vector2(x, y);
         }
 
-        // scoped while zoom level > 0 (AWP-style toggle: right-click cycles hip -> zoom1 -> zoom2 -> hip,
-        // caught as an edge in Update and consumed in OwnerTick, see _zoomCyclePressed/_zoomLevel).
-        // both zoom levels count as scoped for movement facing/strafe. only Snipers scope; a Criminal's
-        // right-click must not flip the body into face-aim/strafe (that's a sniper-only stance); the
-        // Update-side edge-catch already gates on Role, so _zoomLevel simply never advances for them.
-        private bool ReadScoped() => _zoomLevel > 0;
+        // owner-only: latch a pose-key edge for OwnerTick to consume as a sticky toggle. (Update can't touch
+        // _selectedPose directly, the toggle must resolve at tick time so predict + reconcile agree.)
+        private void TogglePose(CharacterPose pose)
+        {
+            _poseKeyPressed = true;
+            _poseKeyValue = pose;
+        }
+
+        // owner-only: the pose to send this tick. a hunter scoping in (zoom > 0) is the Scoped pose; otherwise
+        // it's the criminal's sticky-selected exotic pose (None if unselected). scope and exotic poses never
+        // coexist (role-exclusive), so this simple precedence is unambiguous. SanitizePose re-gates by role.
+        private CharacterPose ResolvePose()
+        {
+            if (Role.Value.IsHunter() && _zoomLevel > 0)
+                return CharacterPose.Scoped;
+            return _selectedPose;
+        }
+
+        // runs in Simulate on both owner and server: force the claimed pose to be legal for this player's
+        // replicated role, so a tampered client can't pose out of its role. hunters may only be None/Scoped;
+        // criminals may hold any pose except Scoped (that's a hunter aim stance, not an exotic pose).
+        private CharacterPose SanitizePose(CharacterPose pose)
+        {
+            bool hunter = Role.Value.IsHunter();
+            if (hunter)
+                return pose == CharacterPose.Scoped ? CharacterPose.Scoped : CharacterPose.None;
+            // criminal (or any non-hunter): drop a spoofed Scoped, allow the exotic poses + None
+            return pose == CharacterPose.Scoped ? CharacterPose.None : pose;
+        }
 
         private bool ReadSprintInput()
         {
@@ -703,7 +816,7 @@ namespace FriendSlop.Player
             public int Tick;
             public Vector3 MoveDir;
             public bool Jump;
-            public bool Scoped; // zoomed in: face the aim direction and strafe
+            public CharacterPose Pose; // chosen deliberate pose (aim/exotic/none), layered over locomotion
             public Vector3 AimDir; // camera's horizontal forward, the body faces this when scoped
             public bool Sprinting;
 
@@ -713,7 +826,7 @@ namespace FriendSlop.Player
                 s.SerializeValue(ref Tick);
                 s.SerializeValue(ref MoveDir);
                 s.SerializeValue(ref Jump);
-                s.SerializeValue(ref Scoped);
+                s.SerializeValue(ref Pose);
                 s.SerializeValue(ref AimDir);
                 s.SerializeValue(ref Sprinting);
             }
@@ -725,7 +838,7 @@ namespace FriendSlop.Player
             public Vector3 Position;
             public Quaternion Rotation;
             public float VerticalVelocity;
-            public bool Scoped;
+            public CharacterPose Pose;
 
             public void NetworkSerialize<T>(BufferSerializer<T> s) where T : IReaderWriter
             {
@@ -733,7 +846,7 @@ namespace FriendSlop.Player
                 s.SerializeValue(ref Position);
                 s.SerializeValue(ref Rotation);
                 s.SerializeValue(ref VerticalVelocity);
-                s.SerializeValue(ref Scoped);
+                s.SerializeValue(ref Pose);
             }
         }
     }

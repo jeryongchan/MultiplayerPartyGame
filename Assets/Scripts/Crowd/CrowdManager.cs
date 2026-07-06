@@ -185,10 +185,10 @@ namespace FriendSlop.Crowd
         // down the NPC with this stream index on this machine (stop + lie down for the round). called on every
         // machine from the criminal's replicated melee-steal RPC, so the same pedestrian goes down everywhere.
         // a no-op if that index isn't currently live here.
-        public void DownNpc(int index)
+        public void DownNpc(int index, int stolenSlot)
         {
             if (_byIndex.TryGetValue(index, out var npc) && npc != null)
-                npc.Down();
+                npc.Down(stolenSlot);
         }
 
         // the appearance of NPC #index, regenerated from the shared seed rather than stored; appearance is a

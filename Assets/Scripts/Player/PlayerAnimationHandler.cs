@@ -22,9 +22,19 @@ namespace FriendSlop.Characters
         private static readonly int SpeedHash = Animator.StringToHash("Speed");
         private static readonly int DownedHash = Animator.StringToHash("Downed");
 
-        // set once in Awake: the Aim layer's index in the Animator, looked up by name so the layer can
-        // be reordered without breaking this reference.
+        // int param on the Pose override layer selecting which exotic pose to play (the CharacterPose enum
+        // value, 0 = None). read by the layer's transitions. named so a stale controller variant lacking it
+        // is guarded via HasParam like Downed.
+        private static readonly int PoseHash = Animator.StringToHash("PoseIndex");
+
+        // set once in Awake: layer indices looked up by name so layers can be reordered without breaking these.
+        // Aim = upper-body aim stance (weight driven by IsScoped). Pose = full-body exotic override (weight
+        // driven by CurrentPose being an exotic pose; the clip chosen by the PoseIndex int param).
         private int _aimLayerIndex = -1;
+        private int _poseLayerIndex = -1;
+
+        [SerializeField]
+        private float poseWeightLerpSpeed = 12f;
 
         private void Awake()
         {
@@ -33,8 +43,16 @@ namespace FriendSlop.Characters
             _npc = GetComponentInParent<Npc>();
 
             if (_animator != null)
+            {
                 _aimLayerIndex = _animator.GetLayerIndex("Aim");
+                _poseLayerIndex = _animator.GetLayerIndex("Pose");
+            }
         }
+
+        // true for the criminal exotic poses that ride the full-body Pose override layer (everything except
+        // None and the aim stance Scoped, which is the Aim layer's job)
+        private static bool IsExoticPose(CharacterPose p) =>
+            p != CharacterPose.None && p != CharacterPose.Scoped;
 
         // true if the live animator controller actually declares this parameter, guards SetBool/SetTrigger
         // against a "Parameter does not exist" throw when a controller variant lacks it (or a stale runtime).
@@ -86,6 +104,24 @@ namespace FriendSlop.Characters
                 _animator.SetLayerWeight(
                     _aimLayerIndex,
                     Mathf.MoveTowards(currentWeight, targetWeight, aimWeightLerpSpeed * Time.deltaTime)
+                );
+            }
+
+            // exotic pose (handstand/shoelace/split): full-body override layer. runs on every copy including
+            // the server; the server's Animator must hold the same pose so the per-bone hitboxes (children of
+            // this rig) are posed when HitboxHistory records/rewinds them, or lag-comp hits the wrong shape.
+            // PoseIndex picks the clip; the layer weight blends the whole override in/out.
+            if (_poseLayerIndex >= 0 && _playerController != null)
+            {
+                CharacterPose pose = _playerController.CurrentPose;
+                if (HasParam(PoseHash))
+                    _animator.SetInteger(PoseHash, (int)pose);
+
+                float targetWeight = IsExoticPose(pose) ? 1f : 0f;
+                float currentWeight = _animator.GetLayerWeight(_poseLayerIndex);
+                _animator.SetLayerWeight(
+                    _poseLayerIndex,
+                    Mathf.MoveTowards(currentWeight, targetWeight, poseWeightLerpSpeed * Time.deltaTime)
                 );
             }
         }

@@ -352,12 +352,21 @@ namespace FriendSlop.Crowd
         //
         // the actual fall/lay animation is driven by PlayerAnimationHandler reading Downed; here we just
         // flip the flag and zero the speed so it blends out of walking.
-        public void Down()
+        public void Down(int stolenSlot)
         {
             if (_dying || _downed)
                 return;
             _downed = true;
             CurrentSpeed = 0f;
+
+            // visibly remove the garment the criminal stole (same slot index on every machine, so the crowd
+            // stays consistent). -1 means nothing was taken. the applier lives on the Character child.
+            if (stolenSlot >= 0)
+            {
+                var applier = GetComponentInChildren<FriendSlop.Characters.CharacterAppearanceApplier>();
+                if (applier != null)
+                    applier.HideSlot(stolenSlot);
+            }
         }
 
         private System.Collections.IEnumerator FadeAndFinish()

@@ -150,14 +150,29 @@ namespace FriendSlop.Player
             if (!CanMelee)
                 return;
 
-            // replicate the reactive event by index so every machine downs its own copy of NPC #index
-            // (no score/appearance yet, that's a later step)
-            NpcDownedRpc(npcIndex);
+            // steal one garment from that NPC onto the criminal so they gradually blend in, one piece per
+            // punch (not the whole outfit), so a full disguise takes several NPCs and the sketch phase still
+            // matters. which piece is taken is seeded by the NPC index (same NPC gives the same piece everywhere).
+            // the NPC's look is regenerated from the crowd seed (pure function of index, zero storage).
+            // capture which slot was stolen so the NPC can visibly lose that same piece.
+            int stolenSlot = -1;
+            if (CrowdManager.Instance != null
+                && CrowdManager.Instance.TryGetAppearance(npcIndex, out var npcLook))
+            {
+                stolenSlot = _controller.StealOneGarment(npcLook, npcIndex,
+                    "Hat", "Outwear", "Glasses", "Pants");
+            }
+
+            // down the NPC on every machine (fall + lie for the round) and strip the stolen slot from it, using
+            // the same slot index so every machine removes the identical garment, no extra networked data.
+            NpcDownedRpc(npcIndex, stolenSlot);
         }
 
-        // server to all machines: down NPC #index locally (fall + lie for the round) via the shared crowd index
+        // server to all machines: down NPC #index locally (fall + lie for the round) and strip the stolen slot
+        // (-1 = none) via the shared crowd index, so every machine drops the same pedestrian minus the same
+        // garment.
         [Rpc(SendTo.ClientsAndHost)]
-        private void NpcDownedRpc(int index) => CrowdManager.Instance?.DownNpc(index);
+        private void NpcDownedRpc(int index, int stolenSlot) => CrowdManager.Instance?.DownNpc(index, stolenSlot);
 
         // server to all machines except the owner (it already triggered its own swing locally on click): play
         // this criminal's punch on every other copy so all players see the swing. NotOwner keeps the owner

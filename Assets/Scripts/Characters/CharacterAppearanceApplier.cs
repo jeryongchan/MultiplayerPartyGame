@@ -124,6 +124,19 @@ namespace FriendSlop.Characters
         // convenience overload using this instance's catalog
         public PlayerAppearance Roll(System.Random rng) => Roll(catalog, rng);
 
+        // hide a single slot's renderer by its catalog index (e.g. a garment stolen off this character). used
+        // by a robbed crowd NPC to visibly lose the piece the criminal took. deterministic per machine, the
+        // caller passes the same slot index everywhere, so the crowd stays consistent with no extra data.
+        // no-op for an out-of-range index or a missing renderer.
+        public void HideSlot(int slotIndex)
+        {
+            if (catalog == null || slotIndex < 0 || slotIndex >= catalog.Slots.Length)
+                return;
+            EnsureCache();
+            if (_rendererCache.TryGetValue(catalog.Slots[slotIndex].childName, out var renderer) && renderer != null)
+                renderer.enabled = false;
+        }
+
         private void EnsureCache()
         {
             if (_cacheBuilt)
