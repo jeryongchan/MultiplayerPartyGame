@@ -557,8 +557,7 @@ namespace FriendSlop.Player
             // strafe relative to it). otherwise faces the movement direction (turn-to-move). movement itself
             // is camera-relative in both; only what the body turns toward changes. exotic poses use
             // movement-facing (they're not aim stances).
-            bool scoped = pose == CharacterPose.Scoped;
-            Vector3 faceDir = scoped ? input.AimDir : input.MoveDir;
+            Vector3 faceDir = pose == CharacterPose.Scoped ? input.AimDir : input.MoveDir;
 
             Quaternion rotation = transform.rotation;
             if (faceDir.sqrMagnitude > 0.001f)
