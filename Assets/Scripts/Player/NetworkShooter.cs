@@ -5,11 +5,14 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // server-authoritative hitscan. owner left-clicks, builds a ray from its camera, sends origin+dir
-    // to the server; the server raycasts, logs the hit, and broadcasts the hit point so every machine
-    // drops a debug marker. no cooldown, damage, or lag-compensation yet. same shared-script model as
-    // NetworkPlayerController: only the owner reads input, only the server decides the hit.
-    public class NetworkShooter : NetworkBehaviour
+    // minimal server-authoritative hitscan. owner left-clicks, builds a ray from its camera,
+    // sends origin+direction to the server, server raycasts, logs who was hit, and broadcasts the
+    // authoritative hit point so every machine drops a debug marker there. no cooldown, damage, or
+    // lag-compensation yet.
+    //
+    // mirrors NetworkPlayerController's model: same shared script on every copy, but only the owner
+    // reads input and sends, and only the server decides the hit (clients never declare "I hit X").
+    public class NetworkShooter : RoleGatedAbility
     {
         // how far the ray reaches; beyond this a shot just misses
         [SerializeField]
@@ -33,9 +36,6 @@ namespace FriendSlop.Player
         // so a modified client could fire faster; fine for now, revisit when cheating matters).
         [SerializeField]
         private float fireCooldown = 1.5f;
-
-        // Time.time of the next allowed shot. owner-only state.
-        private float _nextFireTime;
 
         // recoil per shot, applied to the owner's camera (which also steers aim, so shots walk off-target
         // under rapid fire). vertical kick is consistent; horizontal kick is randomized either way each shot.
@@ -79,20 +79,9 @@ namespace FriendSlop.Player
         private static Material _npcMarkerMaterial;
         private static Material _worldMarkerMaterial;
 
-        // sibling on the same player object; holds the replicated Role we gate firing on.
-        private NetworkPlayerController _controller;
-
-        private void Awake() => _controller = GetComponent<NetworkPlayerController>();
-
-        // hunters shoot (Sniper + Witness for now), composition: ability gated on role data, not a
-        // subclass. readable on any copy via the replicated Role NetworkVariable, so the owner can gate
-        // input and the server can enforce it authoritatively. also gated to the Hunt phase: no firing
-        // during RoleAssign/Sketch/Reveal/Resolution. defaults to "can't shoot" if the controller is
-        // somehow missing. (server-side re-check in SubmitShootServerRpc makes this authoritative.)
-        private bool CanShoot =>
-            _controller != null
-            && _controller.Role.Value.IsHunter()
-            && (GameFlowManager.Instance == null || GameFlowManager.Instance.IsHunt);
+        // hunters shoot (Sniper + Witness for now). the role/alive/phase gate lives in RoleGatedAbility.CanUse;
+        // this only narrows which roles: any hunter.
+        protected override bool RolePredicate(PlayerRole role) => role.IsHunter();
 
         private void Update()
         {
@@ -102,7 +91,7 @@ namespace FriendSlop.Player
 
             // owner-side role gate: a non-Sniper never even builds a shot (cheap, responsive). the server
             // re-checks below so a modified client that bypasses this still can't fire.
-            if (!CanShoot)
+            if (!CanUse)
                 return;
 
             var mouse = UnityEngine.InputSystem.Mouse.current;
@@ -119,13 +108,12 @@ namespace FriendSlop.Player
 
             // sniper can only fire while scoped. right-click is now an AWP-style toggle (cycled in
             // NetworkPlayerController), not a held button, so read the resulting state from there.
-            if (requireScopeToFire && !_controller.IsScoped)
+            if (requireScopeToFire && !Controller.IsScoped)
                 return;
 
             // fire-rate gate: ignore the press if we're still cooling down from the last shot
-            if (Time.time < _nextFireTime)
+            if (!TryConsumeCooldown(fireCooldown))
                 return;
-            _nextFireTime = Time.time + fireCooldown;
 
             // build the shot from the owner's camera: through screen centre, the standard FPS aim.
             // only the owner has this camera, so compute it here and send the result to the server.
@@ -156,7 +144,7 @@ namespace FriendSlop.Player
             // authoritative role gate: the server is the source of truth. a hacked client that strips its
             // owner-side check still lands here, where Role was written by the server from RoleRegistry,
             // so a Criminal physically cannot fire (GDD: server-authoritative).
-            if (!CanShoot)
+            if (!CanUse)
                 return;
 
             if (!ResolveShot(origin, direction, out RaycastHit hit))
@@ -175,11 +163,11 @@ namespace FriendSlop.Player
                     // (hitting a fellow hunter, or anyone outside Hunt, does nothing but drop a marker)
                     if (GameFlowManager.Instance != null && GameFlowManager.Instance.IsHunt
                         && player.TryGetComponent(out NetworkPlayerController victim)
-                        && victim.Role.Value == PlayerRole.Criminal && victim.IsAlive.Value)
+                        && victim.Role.Value == PlayerRole.Criminal && victim.Health.IsAlive.Value)
                     {
                         // head = instant down; body = costs several hits. only score the kill on the blow
                         // that actually downs them (TakeHit returns true exactly once).
-                        if (victim.TakeHit(zone))
+                        if (victim.Health.TakeHit(zone))
                         {
                             ScoreManager.Instance?.RecordCriminalKill(OwnerClientId);
                             // if that downed the last criminal, end Hunt now rather than waiting out the clock

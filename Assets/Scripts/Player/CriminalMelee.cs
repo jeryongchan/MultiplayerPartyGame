@@ -19,7 +19,7 @@ namespace FriendSlop.Player
     //
     // gated to Criminal role + Hunt phase, re-checked on the server so a hacked client can't melee as a hunter
     // or outside Hunt.
-    public class CriminalMelee : NetworkBehaviour
+    public class CriminalMelee : RoleGatedAbility
     {
         // the trigger volume that tracks NPCs in punch reach. a child with a trigger collider +
         // MeleeRangeTracker. if unset, found in children at Awake.
@@ -40,31 +40,22 @@ namespace FriendSlop.Player
         [SerializeField]
         private float rootDuration = 0.77f;
 
-        // Time.time of the next allowed punch. owner-only state.
-        private float _nextTime;
-
-        // sibling controller holding the replicated Role/phase we gate on
-        private NetworkPlayerController _controller;
         // this player's animator (on the Character child), fired for the punch on every copy
         private Animator _animator;
 
         private static readonly int PunchHash = Animator.StringToHash("Punch");
 
-        private void Awake()
+        protected override void Awake()
         {
-            _controller = GetComponent<NetworkPlayerController>();
+            base.Awake(); // caches Controller.
             _animator = GetComponentInChildren<Animator>();
             if (rangeTracker == null)
                 rangeTracker = GetComponentInChildren<MeleeRangeTracker>();
         }
 
-        // criminals melee, only while alive and during Hunt. mirrors NetworkShooter.CanShoot but for the other
-        // team. server re-checks in the RPC so this is authoritative, not just an owner-side convenience.
-        private bool CanMelee =>
-            _controller != null
-            && _controller.Role.Value == PlayerRole.Criminal
-            && _controller.IsAlive.Value
-            && (GameFlowManager.Instance == null || GameFlowManager.Instance.IsHunt);
+        // only the Criminal melees. the alive/phase gate lives in RoleGatedAbility.CanUse; this only narrows
+        // which role.
+        protected override bool RolePredicate(PlayerRole role) => role == PlayerRole.Criminal;
 
         private void Update()
         {
@@ -75,12 +66,11 @@ namespace FriendSlop.Player
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
                 return;
 
-            if (!CanMelee)
+            if (!CanUse)
                 return;
 
-            if (Time.time < _nextTime)
+            if (!TryConsumeCooldown(cooldown))
                 return;
-            _nextTime = Time.time + cooldown;
 
             // start the swing now (feedback for trying). it plays locally on the owner immediately and is
             // broadcast to everyone else. the actual hit is decided later, at the punch's contact frame, by
@@ -100,11 +90,11 @@ namespace FriendSlop.Player
         // feeds zero move input through the same path as the cutscene/downed freeze.
         private System.Collections.IEnumerator RootWhilePunching()
         {
-            if (_controller != null)
-                _controller.MovementLocked = true;
+            if (Controller != null)
+                Controller.MovementLocked = true;
             yield return new WaitForSeconds(rootDuration);
-            if (_controller != null)
-                _controller.MovementLocked = false;
+            if (Controller != null)
+                Controller.MovementLocked = false;
         }
 
         // called by an animation event on the punch clip at the contact frame (fist fully extended). fires on
@@ -113,7 +103,7 @@ namespace FriendSlop.Player
         // send the nearest in-range NPC's index; the server re-validates before downing it.
         public void OnPunchContact()
         {
-            if (!IsOwner || !CanMelee || rangeTracker == null)
+            if (!IsOwner || !CanUse || rangeTracker == null)
                 return;
 
             // pick the target on the owner from its own trigger + facing (the owner is the one whose reach the
@@ -126,8 +116,8 @@ namespace FriendSlop.Player
         // safety: never leave the player rooted if the object goes away mid-swing (despawn/scene change)
         public override void OnNetworkDespawn()
         {
-            if (_controller != null)
-                _controller.MovementLocked = false;
+            if (Controller != null)
+                Controller.MovementLocked = false;
         }
 
         // owner to server: broadcast the swing to the other copies so everyone sees the criminal punch. the
@@ -135,7 +125,7 @@ namespace FriendSlop.Player
         [Rpc(SendTo.Server)]
         private void PlaySwingServerRpc()
         {
-            if (!CanMelee)
+            if (!CanUse)
                 return;
             PunchOthersRpc();
         }
@@ -147,7 +137,7 @@ namespace FriendSlop.Player
         [Rpc(SendTo.Server)]
         private void SubmitHitServerRpc(int npcIndex)
         {
-            if (!CanMelee)
+            if (!CanUse)
                 return;
 
             // steal one garment from that NPC onto the criminal so they gradually blend in, one piece per
@@ -159,7 +149,7 @@ namespace FriendSlop.Player
             if (CrowdManager.Instance != null
                 && CrowdManager.Instance.TryGetAppearance(npcIndex, out var npcLook))
             {
-                stolenSlot = _controller.StealOneGarment(npcLook, npcIndex,
+                stolenSlot = Controller.StealOneGarment(npcLook, npcIndex,
                     "Hat", "Outwear", "Glasses", "Pants");
             }
 

@@ -2684,7 +2684,9 @@ Animator:
   m_LinearVelocityBlending: 0
   m_StabilizeFeet: 0
   m_AnimatePhysics: 0
-  m_WarningMessage: 
+  m_WarningMessage: "\nBinding warning: Some generic clip(s) animate transforms that
+    are already bound by a Humanoid avatar. These transforms can only be changed
+    by Humanoid clips.\n\tTransform 'Hips'\n\tFrom animation clip 'Handstand'"
   m_HasTransformHierarchy: 1
   m_AllowConstantClipSamplingOptimization: 1
   m_KeepAnimatorStateOnDisable: 0
@@ -2716,6 +2718,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Characters.PlayerAnimationHandler
   dampTime: 0.1
   aimWeightLerpSpeed: 10
+  poseWeightLerpSpeed: 12
 --- !u!114 &3183104597650506009
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4863,6 +4866,7 @@ GameObject:
   - component: {fileID: 6678650672768488292}
   - component: {fileID: 7535546521193008335}
   - component: {fileID: 8600231418081796205}
+  - component: {fileID: 6762774773118287858}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -4959,10 +4963,8 @@ MonoBehaviour:
   reconcileThreshold: 0.1
   interpolationDelay: 0.1
   visual: {fileID: 4868148605327696447}
-  hitCollider: {fileID: 0}
   appearanceApplier: {fileID: 6358839518120969416}
   appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
-  bodyHitsToKill: 3
 --- !u!114 &1069966132034548798
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5162,6 +5164,22 @@ MonoBehaviour:
   coneHalfAngle: 60
   cooldown: 1
   rootDuration: 0.77
+--- !u!114 &6762774773118287858
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 86f6f4a0550be1b4eb3437250260be0b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerHealth
+  ShowTopMostFoldoutHeaderGroup: 1
+  visual: {fileID: 4868148605327696447}
+  hitCollider: {fileID: 0}
+  bodyHitsToKill: 3
 --- !u!1 &8341231475677589786
 GameObject:
   m_ObjectHideFlags: 0

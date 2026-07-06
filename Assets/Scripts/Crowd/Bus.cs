@@ -17,7 +17,7 @@ namespace FriendSlop.Crowd
     //
     // distances are integrated analytically from the profile (no per-frame accumulation of state), so a late
     // joiner that starts sampling mid-drive lands on the exact same spot as everyone else.
-    public class Bus : MonoBehaviour
+    public class Bus : MonoBehaviour, IStreamItem
     {
         // lane geometry, injected by the manager at spawn. world space; the bus drives start -> end.
         private Vector3 _start;

@@ -43,12 +43,6 @@ namespace FriendSlop.Player
         [SerializeField]
         private Transform visual;
 
-        // the player's shootable body hitbox (the dedicated CapsuleCollider NetworkShooter raycasts). hidden
-        // together with the mesh when the player is downed, so a corpse can't be shot again. optional; if
-        // unassigned, only the mesh hides.
-        [SerializeField]
-        private Collider hitCollider;
-
         [Header("Appearance")]
         // paints the modular character mesh from the replicated PlayerAppearance. lives on the Character child.
         [SerializeField]
@@ -63,9 +57,15 @@ namespace FriendSlop.Player
 
         private CharacterController _controller;
 
-        // visual render-interp (simulate path): the two most recent tick poses + the latest tick's time.
-        // the mesh is drawn Lerp(prev, curr, timeSinceTick / tickDt) each frame. used by the owner and
-        // the host's copy of a remote, not pure remotes (those use the _snap* snapshots).
+        // sibling health component (alive/down state + HP). cached so the many external readers reach it as
+        // playerController.Health.IsAlive without a repeated GetComponent, and so the controller's own freeze
+        // path can read IsAlive. assigned in Awake.
+        public PlayerHealth Health { get; private set; }
+
+        // visual render-interpolation (simulate path): the two most recent tick poses + the time of the
+        // latest tick. the mesh is drawn Lerp(prev, curr, timeSinceTick / tickDt) each frame, so it moves
+        // smoothly between ticks. used by the owner and the host's copy of a remote, not pure remotes
+        // (those use the _snap* snapshots instead). distinct from the authoritative pose in _stateBuffer.
         private Vector3 _prevVisualPos,
             _currVisualPos;
         private Quaternion _prevVisualRot,
@@ -82,22 +82,6 @@ namespace FriendSlop.Player
         // tree. owner reads it to gate input locally; server reads it to enforce authoritatively.
         public readonly NetworkVariable<PlayerRole> Role =
             new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
-
-        // alive/down state for the round. server-write, read everywhere. a criminal shot during Hunt is
-        // set false: its mesh + hitbox hide on every copy (OnValueChanged) and, on the owner, its input is
-        // frozen so it spectates in place until the next round. RespawnForRole revives it. defaults true so
-        // nobody spawns dead (and non-round systems that never touch it see a live player).
-        public readonly NetworkVariable<bool> IsAlive =
-            new NetworkVariable<bool>(true, writePerm: NetworkVariableWritePermission.Server);
-
-        // how many body hits it takes to down this player. a head hit is always an instant kill regardless.
-        // server-only tuning; exposed so you can tweak survivability in the Inspector while testing.
-        [SerializeField]
-        private int bodyHitsToKill = 3;
-
-        // remaining body hits before this player goes down, server-side only (never networked; clients don't
-        // need the number, only the resulting IsAlive flip). refilled to bodyHitsToKill on spawn/respawn.
-        private int _hp;
 
         // this player's randomized look, rolled once by the server on spawn and replicated to every copy as
         // a small index struct (never mesh data). each machine paints its own character mesh from it via
@@ -211,7 +195,11 @@ namespace FriendSlop.Player
         private TimedSnapshot? _snapFrom;
         private TimedSnapshot? _snapTo;
 
-        private void Awake() => _controller = GetComponent<CharacterController>();
+        private void Awake()
+        {
+            _controller = GetComponent<CharacterController>();
+            Health = GetComponent<PlayerHealth>();
+        }
 
         private float TickDt =>
             NetworkManager != null ? 1f / NetworkManager.NetworkConfig.TickRate : 1f / 30f;
@@ -224,7 +212,6 @@ namespace FriendSlop.Player
                     ? RoleRegistry.Instance.GetRole(OwnerClientId)
                     : PlayerRole.Sniper;
                 Role.Value = role;
-                _hp = bodyHitsToKill; // start the round at full body HP.
                 var spawnPos = SpawnPointManager.Instance != null
                     ? SpawnPointManager.Instance.GetSpawnPoint(role)
                     : DebugSpawnPosition((int)OwnerClientId);
@@ -260,11 +247,6 @@ namespace FriendSlop.Player
 
             _authoritativeState.OnValueChanged += OnAuthoritativeStateChanged;
 
-            // down/alive visuals: hide the mesh + hitbox on every copy when a player is downed. apply the
-            // current value now (covers late joiners who arrive mid-round) and react to changes after.
-            IsAlive.OnValueChanged += OnAliveChanged;
-            ApplyAliveVisual(IsAlive.Value);
-
             // paint the character mesh from the replicated appearance, and repaint if it changes later
             if (appearanceApplier != null)
             {
@@ -296,7 +278,6 @@ namespace FriendSlop.Player
         {
             _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
             Appearance.OnValueChanged -= OnAppearanceChanged;
-            IsAlive.OnValueChanged -= OnAliveChanged;
             if (NetworkManager != null && NetworkManager.NetworkTickSystem != null)
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
@@ -421,7 +402,7 @@ namespace FriendSlop.Player
             // frozen if the phase freezes everyone (SketchReveal cutscene) or this player is downed (a
             // spectating criminal can't move).
             bool frozen = (GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen)
-                || !IsAlive.Value
+                || (Health != null && !Health.IsAlive.Value)
                 || MovementLocked; // e.g. rooted mid-punch so the criminal can't glide while swinging.
 
             Vector2 rawMove = frozen ? Vector2.zero : (MoveInputOverride ?? ReadMoveInput());
@@ -608,8 +589,8 @@ namespace FriendSlop.Player
                 return;
 
             Role.Value = role;
-            IsAlive.Value = true; // revive for the new round (mesh/hitbox re-show via OnValueChanged)
-            _hp = bodyHitsToKill; // refill body HP for the new round
+            if (Health != null)
+                Health.Revive(); // alive again with full body HP (mesh/hitbox re-show via OnValueChanged)
             RollAppearance(round); // fresh look each round, a new character, not last round's outfit
             var spawnPos = SpawnPointManager.Instance != null
                 ? SpawnPointManager.Instance.GetSpawnPoint(role)
@@ -671,52 +652,6 @@ namespace FriendSlop.Player
 
             Appearance.Value = new PlayerAppearance(current);
             return pick;
-        }
-
-        // server-only. mark this player down (or revive). down players hide their mesh + hitbox (so they
-        // can't be shot again) on every copy and, on the owner, freeze input to spectate in place. called
-        // by NetworkShooter when a criminal is hit during Hunt.
-        public void SetAlive(bool alive)
-        {
-            if (!IsServer)
-                return;
-            IsAlive.Value = alive;
-            if (alive)
-                _hp = bodyHitsToKill; // reviving refills body HP
-        }
-
-        // server-only. apply one hit in the given zone. a head hit downs instantly; a body hit decrements
-        // HP and only downs at zero. returns true if this hit was the killing blow (so the caller can
-        // score the kill exactly once). no-ops if already down. body HP refills on respawn/SetAlive(true).
-        public bool TakeHit(HitZone zone)
-        {
-            if (!IsServer || !IsAlive.Value)
-                return false;
-
-            if (zone == HitZone.Head)
-            {
-                IsAlive.Value = false;
-                return true;
-            }
-
-            _hp--;
-            if (_hp <= 0)
-            {
-                IsAlive.Value = false;
-                return true;
-            }
-            return false; // survived, a body hit that didn't kill
-        }
-
-        // runs on every copy when IsAlive flips: show/hide the mesh + shootable hitbox
-        private void OnAliveChanged(bool _, bool alive) => ApplyAliveVisual(alive);
-
-        private void ApplyAliveVisual(bool alive)
-        {
-            if (visual != null)
-                visual.gameObject.SetActive(alive);
-            if (hitCollider != null)
-                hitCollider.enabled = alive;
         }
 
         private void TeleportTo(Vector3 position)

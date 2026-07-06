@@ -26,7 +26,7 @@ namespace FriendSlop.Crowd
     // a path-node system where each waypoint carries an optional NodeBehaviour ScriptableObject (Dwell,
     // Strafe, LookAt, etc.) for criminals to mimic specific behaviours at authored locations; jitter/sway,
     // subtle per-frame lateral noise so NPCs don't walk robotically straight.
-    public class Npc : MonoBehaviour
+    public class Npc : MonoBehaviour, IStreamItem
     {
         [Header("Path (standalone testing only, manager injects via Initialize)")]
         // world-space waypoints, looped (last connects back to first). optional; used only when no path is

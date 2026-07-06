@@ -130,7 +130,7 @@ namespace FriendSlop.Game
         {
             foreach (var kv in NetworkManager.Singleton.SpawnManager.SpawnedObjects)
                 if (kv.Value.TryGetComponent(out NetworkPlayerController pc)
-                    && pc.Role.Value == PlayerRole.Criminal && pc.IsAlive.Value)
+                    && pc.Role.Value == PlayerRole.Criminal && pc.Health.IsAlive.Value)
                     return true;
             return false;
         }

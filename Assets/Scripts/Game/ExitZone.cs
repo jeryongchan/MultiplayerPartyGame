@@ -48,11 +48,11 @@ namespace FriendSlop.Game
                 return;
 
             // only a still-live criminal escapes. snipers/witness and already-downed criminals are ignored.
-            if (player.Role.Value != PlayerRole.Criminal || !player.IsAlive.Value)
+            if (player.Role.Value != PlayerRole.Criminal || !player.Health.IsAlive.Value)
                 return;
 
             ScoreManager.Instance?.RecordCriminalEscape(player.OwnerClientId);
-            player.SetAlive(false); // remove from the round: hidden + spectating, and not counted again
+            player.Health.SetAlive(false); // remove from the round: hidden + spectating, and not counted again
 
             // if that was the last criminal in play, end Hunt now instead of running out the clock
             GameFlowManager.Instance?.EndHuntIfNoCriminalsLeft();

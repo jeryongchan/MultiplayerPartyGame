@@ -102,7 +102,7 @@ namespace FriendSlop.Game
             {
                 if (!kv.Value.TryGetComponent(out NetworkPlayerController pc))
                     continue;
-                if (pc.Role.Value != PlayerRole.Criminal || !pc.IsAlive.Value)
+                if (pc.Role.Value != PlayerRole.Criminal || !pc.Health.IsAlive.Value)
                     continue;
                 Mutate(pc.OwnerClientId, s =>
                 {
