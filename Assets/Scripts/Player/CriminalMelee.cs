@@ -149,7 +149,7 @@ namespace FriendSlop.Player
             if (CrowdManager.Instance != null
                 && CrowdManager.Instance.TryGetAppearance(npcIndex, out var npcLook))
             {
-                stolenSlot = Controller.StealOneGarment(npcLook, npcIndex,
+                stolenSlot = Controller.Appearances.StealOneGarment(npcLook, npcIndex,
                     "Hat", "Outwear", "Glasses", "Pants");
             }
 

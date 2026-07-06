@@ -1,4 +1,3 @@
-using FriendSlop.Characters;
 using FriendSlop.Game;
 using Unity.Netcode;
 using UnityEngine;
@@ -43,16 +42,6 @@ namespace FriendSlop.Player
         [SerializeField]
         private Transform visual;
 
-        [Header("Appearance")]
-        // paints the modular character mesh from the replicated PlayerAppearance. lives on the Character child.
-        [SerializeField]
-        private CharacterAppearanceApplier appearanceApplier;
-
-        // shared lookup table mapping appearance indices to meshes. must be the same asset on every machine
-        // (it's a project asset, so it is). the server rolls indices against it; every client resolves them.
-        [SerializeField]
-        private CharacterAppearanceCatalog appearanceCatalog;
-
         private const int BufferSize = 256;
 
         private CharacterController _controller;
@@ -61,6 +50,14 @@ namespace FriendSlop.Player
         // playerController.Health.IsAlive without a repeated GetComponent, and so the controller's own freeze
         // path can read IsAlive. assigned in Awake.
         public PlayerHealth Health { get; private set; }
+
+        // sibling appearance component (the replicated look + roll/steal). cached so CriminalMelee can reach it
+        // as playerController.Appearances.StealOneGarment, and RespawnForRole can re-roll it. assigned in Awake.
+        public PlayerAppearanceSync Appearances { get; private set; }
+
+        // sibling input reader (owner-only local input to per-tick intent). cached so Update can latch edges and
+        // OwnerTick can sample. only meaningful on the owner; other copies never call into it. assigned in Awake.
+        public PlayerInputReader Input { get; private set; }
 
         // visual render-interpolation (simulate path): the two most recent tick poses + the time of the
         // latest tick. the mesh is drawn Lerp(prev, curr, timeSinceTick / tickDt) each frame, so it moves
@@ -83,49 +80,31 @@ namespace FriendSlop.Player
         public readonly NetworkVariable<PlayerRole> Role =
             new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
 
-        // this player's randomized look, rolled once by the server on spawn and replicated to every copy as
-        // a small index struct (never mesh data). each machine paints its own character mesh from it via
-        // the shared catalog. server-write like Role; read and applied by all.
-        public readonly NetworkVariable<PlayerAppearance> Appearance =
-            new NetworkVariable<PlayerAppearance>(writePerm: NetworkVariableWritePermission.Server);
-
         // owner-side ring buffers, indexed by tick % BufferSize.
         private readonly InputPayload[] _inputBuffer = new InputPayload[BufferSize];
         private readonly StatePayload[] _stateBuffer = new StatePayload[BufferSize];
 
         // mutable sim state the owner predicts forward; the server keeps its own copy in _authoritativeState.
         private float _verticalVelocity;
-        private bool _jumpLatched;
         private int _currentTick;
         private float _lastSimulatedSpeed;
         private CharacterPose _lastSimulatedPose;
-
-        // owner-only: the criminal's currently-selected exotic pose (sticky, held until changed). number
-        // keys set it in Update; OwnerTick folds it into InputPayload.Pose. scope (a hunter pose) is chosen
-        // separately via _zoomLevel and doesn't touch this; the two never coexist (a criminal can't scope,
-        // a hunter has no exotic poses), so the single CurrentPose enum resolves cleanly in Simulate.
-        private CharacterPose _selectedPose = CharacterPose.None;
-        private bool _poseKeyPressed;
-        private CharacterPose _poseKeyValue;
-
-        // owner-only: right-click cycles hip(0) -> zoom1(1) -> zoom2(2) -> hip(0), AWP-style toggle
-        // instead of hold-to-scope. zoom level 1 and 2 both count as "scoped" for gameplay (movement
-        // facing, aim animation, gun grip); only the camera FOV differs between them, read directly
-        // by ThirdPersonCamera via ZoomLevel. not networked: only the owner's own camera needs the
-        // exact level, and Scoped (in StatePayload) already replicates the gameplay-relevant bool.
-        private int _zoomLevel;
-        private bool _zoomCyclePressed;
 
         // owner-only: true once the follow camera has been found + targeted. until then the owner retries
         // each frame (the camera may not exist yet when a client's player spawns during scene-sync).
         private bool _cameraAttached;
 
         // owner-only: 0 = hip, 1 = scoped, 2 = scoped further in. drives ThirdPersonCamera's FOV.
-        public int ZoomLevel => _zoomLevel;
+        // forwarded from the input reader so the camera can keep reading it off the controller.
+        public int ZoomLevel => Input != null ? Input.ZoomLevel : 0;
 
-        // optional test hook: when set (e.g. by AutoStrafe), this raw move input replaces WASD on the
-        // owner. stays null in normal play. lets a test drive movement through the real input path.
-        public Vector2? MoveInputOverride { get; set; }
+        // optional test hook: when set (e.g. by AutoStrafe), this raw move input replaces WASD on the owner.
+        // forwarded to the input reader (which owns the actual sampling). stays null in normal play.
+        public Vector2? MoveInputOverride
+        {
+            get => Input != null ? Input.MoveInputOverride : null;
+            set { if (Input != null) Input.MoveInputOverride = value; }
+        }
 
         // owner-only movement root: while true, OwnerTick feeds zero move input (same as the freeze path), so
         // the player can't glide during an action that should plant them, e.g. a criminal's punch. set/cleared
@@ -199,6 +178,8 @@ namespace FriendSlop.Player
         {
             _controller = GetComponent<CharacterController>();
             Health = GetComponent<PlayerHealth>();
+            Appearances = GetComponent<PlayerAppearanceSync>();
+            Input = GetComponent<PlayerInputReader>();
         }
 
         private float TickDt =>
@@ -217,10 +198,6 @@ namespace FriendSlop.Player
                     : DebugSpawnPosition((int)OwnerClientId);
                 TeleportTo(spawnPos);
                 _authoritativeState.Value = CaptureState(0);
-
-                // roll the initial look (round 0). re-rolled each round in RespawnForRole so a new round is
-                // a fresh character. replicated via the NetworkVariable; every copy paints from it.
-                RollAppearance(0);
             }
 
             if (IsOwner)
@@ -247,18 +224,6 @@ namespace FriendSlop.Player
 
             _authoritativeState.OnValueChanged += OnAuthoritativeStateChanged;
 
-            // paint the character mesh from the replicated appearance, and repaint if it changes later
-            if (appearanceApplier != null)
-            {
-                if (appearanceCatalog != null)
-                    appearanceApplier.SetCatalog(appearanceCatalog);
-                Appearance.OnValueChanged += OnAppearanceChanged;
-                // late joiners (and the server itself) already have a value here, apply it now. it may be
-                // uninitialized (default) on the very first server frame; harmless, the OnValueChanged repaints.
-                if (Appearance.Value.IsValid)
-                    appearanceApplier.Apply(Appearance.Value);
-            }
-
             NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
         }
 
@@ -267,7 +232,7 @@ namespace FriendSlop.Player
         // may appear a frame or two after a client's player spawns, hence the retry.
         private void TryAttachCamera()
         {
-            var cam = Object.FindFirstObjectByType<ThirdPersonCamera>();
+            var cam = ThirdPersonCamera.Instance;
             if (cam == null)
                 return;
             cam.SetTarget(visual != null ? visual : transform); // follow the smoothed mesh
@@ -277,7 +242,6 @@ namespace FriendSlop.Player
         public override void OnNetworkDespawn()
         {
             _authoritativeState.OnValueChanged -= OnAuthoritativeStateChanged;
-            Appearance.OnValueChanged -= OnAppearanceChanged;
             if (NetworkManager != null && NetworkManager.NetworkTickSystem != null)
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
@@ -303,29 +267,10 @@ namespace FriendSlop.Player
                 if (!_cameraAttached)
                     TryAttachCamera();
 
-                // movement is handled in OwnerTick; Jump is an edge event so it's latched here in Update
-                var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb != null && kb.spaceKey.wasPressedThisFrame)
-                    _jumpLatched = true;
-
-                // right-click cycles the zoom level (edge event, like Jump). only Snipers can scope,
-                // a Criminal's right-click stays a no-op, same gating ResolvePose() already enforces.
-                var mouse = UnityEngine.InputSystem.Mouse.current;
-                if (mouse != null && mouse.rightButton.wasPressedThisFrame && Role.Value.IsHunter())
-                    _zoomCyclePressed = true;
-
-                // criminal exotic poses: number keys sticky-toggle a pose (press to enter, press the same key
-                // or 0 to stand). edge-caught here, consumed in OwnerTick -> InputPayload.Pose. only the
-                // Criminal poses; the server re-checks the role in Simulate so a hacked client can't pose as a
-                // hunter (and can't scope-via-pose either). 0 clears back to None. (RolePickerDebug moved to
-                // F1/F2 so the number row is free here; swap to a radial menu when that picker is deleted.)
-                if (kb != null && Role.Value == PlayerRole.Criminal)
-                {
-                    if (kb.digit1Key.wasPressedThisFrame) TogglePose(CharacterPose.Handstand);
-                    else if (kb.digit2Key.wasPressedThisFrame) TogglePose(CharacterPose.Shoelace);
-                    else if (kb.digit3Key.wasPressedThisFrame) TogglePose(CharacterPose.Split);
-                    else if (kb.digit0Key.wasPressedThisFrame) { _poseKeyPressed = true; _poseKeyValue = CharacterPose.None; }
-                }
+                // latch this frame's edge events (jump / zoom-cycle / pose-key), the reader consumes them at
+                // tick time in OwnerTick so predict + reconcile agree on the same input for a tick.
+                if (Input != null)
+                    Input.LatchEdges(Role.Value);
             }
             InterpolateTransform();
         }
@@ -379,43 +324,33 @@ namespace FriendSlop.Player
         // owner: predict locally, buffer, send to server
         private void OwnerTick()
         {
-            // consume the right-click edge caught in Update: cycle hip -> zoom1 -> zoom2 -> hip
-            if (_zoomCyclePressed)
-            {
-                _zoomLevel = (_zoomLevel + 1) % 3;
-                _zoomCyclePressed = false;
-            }
-
-            // consume the pose-key edge caught in Update: sticky toggle (same key again returns to stand)
-            if (_poseKeyPressed)
-            {
-                _selectedPose = _selectedPose == _poseKeyValue ? CharacterPose.None : _poseKeyValue;
-                _poseKeyPressed = false;
-            }
-
             int tick = _currentTick;
+
+            // sample this tick's intent from local input. this also consumes the latched edges (zoom cycle,
+            // pose toggle, jump) at tick time, resolving them here, not in Update, is what keeps predict +
+            // reconcile in agreement. zoom/pose still update even while frozen below (you can re-aim while
+            // held); only the movement is zeroed.
+            PlayerIntent intent = Input != null ? Input.Sample(Role.Value) : default;
 
             // hard input-freeze during the reporter cutscene (SketchReveal): the owner sends empty
             // movement so its own prediction and the server simulate the same still input, no reconcile
             // fight, no desync. physics (gravity/grounding) still runs on a zero MoveDir, so nobody floats.
             // note: sketch-phase containment is handled by scene geometry (invisible walls), not here.
             // frozen if the phase freezes everyone (SketchReveal cutscene) or this player is downed (a
-            // spectating criminal can't move).
+            // spectating criminal can't move). physics still runs on zero input so nobody floats.
             bool frozen = (GameFlowManager.Instance != null && GameFlowManager.Instance.InputFrozen)
                 || (Health != null && !Health.IsAlive.Value)
                 || MovementLocked; // e.g. rooted mid-punch so the criminal can't glide while swinging.
 
-            Vector2 rawMove = frozen ? Vector2.zero : (MoveInputOverride ?? ReadMoveInput());
             var input = new InputPayload
             {
                 Tick = tick,
-                MoveDir = CameraRelativeDirection(rawMove),
-                Jump = !frozen && _jumpLatched,
-                Pose = frozen ? CharacterPose.None : ResolvePose(),
-                AimDir = CameraForward(),
-                Sprinting = !frozen && ReadSprintInput(),
+                MoveDir = frozen ? Vector3.zero : intent.MoveDir,
+                Jump = !frozen && intent.Jump,
+                Pose = frozen ? CharacterPose.None : intent.Pose,
+                AimDir = intent.AimDir,
+                Sprinting = !frozen && intent.Sprinting,
             };
-            _jumpLatched = false;
 
             // predict with the shared step. Simulate() leaves the controller at the resulting position,
             // so no extra ApplyState is needed (that would re-teleport).
@@ -461,14 +396,6 @@ namespace FriendSlop.Player
                 Reconcile(authoritativeState);
             else
                 RecordSnapshot(authoritativeState); // remote copy: buffer for interpolation in Update()
-        }
-
-        // appearance replicated in (or changed): repaint the character mesh on this copy. runs on every
-        // machine, owner, server, and remotes, so all see the same look from the same index struct.
-        private void OnAppearanceChanged(PlayerAppearance _, PlayerAppearance appearance)
-        {
-            if (appearanceApplier != null)
-                appearanceApplier.Apply(appearance);
         }
 
         // pure remote: a new authoritative snapshot arrived. shift the latest into 'from' and store the
@@ -591,67 +518,13 @@ namespace FriendSlop.Player
             Role.Value = role;
             if (Health != null)
                 Health.Revive(); // alive again with full body HP (mesh/hitbox re-show via OnValueChanged)
-            RollAppearance(round); // fresh look each round, a new character, not last round's outfit
+            if (Appearances != null)
+                Appearances.Roll(round); // fresh look each round, a new character, not last round's outfit
             var spawnPos = SpawnPointManager.Instance != null
                 ? SpawnPointManager.Instance.GetSpawnPoint(role)
                 : DebugSpawnPosition((int)OwnerClientId);
             TeleportTo(spawnPos);
             _authoritativeState.Value = CaptureState(_authoritativeState.Value.Tick);
-        }
-
-        // server-only. roll this player's replicated appearance for the given round, seeded by (clientId,
-        // round) so it's deterministic (reproducible/debuggable) yet genuinely different each round; mixing
-        // the round in is what stops it re-rolling the identical outfit. every copy repaints via OnValueChanged.
-        private void RollAppearance(int round)
-        {
-            if (appearanceCatalog == null)
-                return;
-            int seed = unchecked((int)OwnerClientId * 73856093 ^ round * 19349663);
-            Appearance.Value = CharacterAppearanceApplier.Roll(appearanceCatalog, new System.Random(seed));
-        }
-
-        // server-only. steal one garment from source (an NPC's look) into this player's, the
-        // criminal's disguise-steal. which slot is taken is chosen from pool seeded by
-        // seed (the NPC index), so the same NPC always yields the same piece on every
-        // machine, deterministic, no networking. taking one piece per punch (not the whole outfit) keeps the
-        // disguise from being too strong, so the sketch phase still matters: a full look takes several NPCs.
-        //
-        // only that one slot changes; the rest of this player's look is kept. writes the replicated Appearance,
-        // so every copy repaints via OnValueChanged (zero mesh bandwidth, just the index struct). no-op off
-        // the server. names not found in the catalog are skipped when narrowing the pool.
-        //
-        // returns the catalog slot index that was stolen, or -1 if nothing was (so the caller can tell the
-        // NPC which garment to remove). the pick is deterministic in seed.
-        public int StealOneGarment(PlayerAppearance source, int seed, params string[] pool)
-        {
-            if (!IsServer || appearanceCatalog == null || !source.IsValid || pool == null || pool.Length == 0)
-                return -1;
-
-            var slots = appearanceCatalog.Slots;
-
-            // resolve the pool names to valid catalog slot indices (skip any missing / out of range)
-            var candidates = new System.Collections.Generic.List<int>(pool.Length);
-            foreach (var name in pool)
-            {
-                int idx = System.Array.FindIndex(slots, s => s.childName == name);
-                if (idx >= 0 && idx < source.slots.Length)
-                    candidates.Add(idx);
-            }
-            if (candidates.Count == 0)
-                return -1;
-
-            // pick one candidate slot, seeded by the NPC index so it's the same everywhere and per-NPC stable
-            int pick = candidates[new System.Random(seed * 83492791).Next(candidates.Count)];
-
-            // start from this player's current look so we overwrite only the stolen slot
-            var current = Appearance.Value.IsValid && Appearance.Value.slots != null
-                ? (sbyte[])Appearance.Value.slots.Clone()
-                : new sbyte[appearanceCatalog.SlotCount];
-            if (pick < current.Length)
-                current[pick] = source.slots[pick]; // copy the NPC's variant for this one slot (may be Hidden)
-
-            Appearance.Value = new PlayerAppearance(current);
-            return pick;
         }
 
         private void TeleportTo(Vector3 position)
@@ -670,52 +543,6 @@ namespace FriendSlop.Player
             return new Vector3(offset, 1.1f, 0f);
         }
 
-        private static Vector3 CameraRelativeDirection(Vector2 input)
-        {
-            if (input.sqrMagnitude < 0.001f)
-                return Vector3.zero;
-
-            Transform cam = Camera.main != null ? Camera.main.transform : null;
-            if (cam == null)
-                return new Vector3(input.x, 0f, input.y);
-
-            Vector3 forward = cam.forward;
-            forward.y = 0f;
-            forward.Normalize();
-            Vector3 right = cam.right;
-            right.y = 0f;
-            right.Normalize();
-            return (forward * input.y + right * input.x).normalized;
-        }
-
-        private static Vector2 ReadMoveInput()
-        {
-            var kb = UnityEngine.InputSystem.Keyboard.current;
-            if (kb == null)
-                return Vector2.zero;
-            float x = (kb.dKey.isPressed ? 1f : 0f) - (kb.aKey.isPressed ? 1f : 0f);
-            float y = (kb.wKey.isPressed ? 1f : 0f) - (kb.sKey.isPressed ? 1f : 0f);
-            return new Vector2(x, y);
-        }
-
-        // owner-only: latch a pose-key edge for OwnerTick to consume as a sticky toggle. (Update can't touch
-        // _selectedPose directly, the toggle must resolve at tick time so predict + reconcile agree.)
-        private void TogglePose(CharacterPose pose)
-        {
-            _poseKeyPressed = true;
-            _poseKeyValue = pose;
-        }
-
-        // owner-only: the pose to send this tick. a hunter scoping in (zoom > 0) is the Scoped pose; otherwise
-        // it's the criminal's sticky-selected exotic pose (None if unselected). scope and exotic poses never
-        // coexist (role-exclusive), so this simple precedence is unambiguous. SanitizePose re-gates by role.
-        private CharacterPose ResolvePose()
-        {
-            if (Role.Value.IsHunter() && _zoomLevel > 0)
-                return CharacterPose.Scoped;
-            return _selectedPose;
-        }
-
         // runs in Simulate on both owner and server: force the claimed pose to be legal for this player's
         // replicated role, so a tampered client can't pose out of its role. hunters may only be None/Scoped;
         // criminals may hold any pose except Scoped (that's a hunter aim stance, not an exotic pose).
@@ -728,22 +555,7 @@ namespace FriendSlop.Player
             return pose == CharacterPose.Scoped ? CharacterPose.None : pose;
         }
 
-        private bool ReadSprintInput()
-        {
-            var kb = UnityEngine.InputSystem.Keyboard.current;
-            return kb != null && kb.shiftKey.isPressed;
-        }
-
-        // the camera's horizontal forward, the aim direction the body faces when scoped
-        private static Vector3 CameraForward()
-        {
-            Transform cam = Camera.main != null ? Camera.main.transform : null;
-            if (cam == null)
-                return Vector3.forward;
-            Vector3 forward = cam.forward;
-            forward.y = 0f;
-            return forward.normalized;
-        }
+        // payloads
 
         private struct InputPayload : INetworkSerializable
         {

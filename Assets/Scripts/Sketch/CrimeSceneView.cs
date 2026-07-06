@@ -106,7 +106,7 @@ namespace FriendSlop.Sketch
                 if (applier != null)
                 {
                     applier.SetCatalog(catalog);
-                    applier.Apply(pc.Appearance.Value);
+                    applier.Apply(pc.Appearances.Appearance.Value);
                 }
                 _figures.Add(figure);
             }
@@ -118,7 +118,7 @@ namespace FriendSlop.Sketch
         {
             if (cameraAnchor == null)
                 return;
-            _witnessCamera = Object.FindFirstObjectByType<ThirdPersonCamera>();
+            _witnessCamera = ThirdPersonCamera.Instance;
             if (_witnessCamera != null)
                 _witnessCamera.SetFixedView(cameraAnchor);
         }

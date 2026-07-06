@@ -4867,6 +4867,8 @@ GameObject:
   - component: {fileID: 7535546521193008335}
   - component: {fileID: 8600231418081796205}
   - component: {fileID: 6762774773118287858}
+  - component: {fileID: 6725415357126542444}
+  - component: {fileID: 868169867567880755}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -4963,8 +4965,6 @@ MonoBehaviour:
   reconcileThreshold: 0.1
   interpolationDelay: 0.1
   visual: {fileID: 4868148605327696447}
-  appearanceApplier: {fileID: 6358839518120969416}
-  appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
 --- !u!114 &1069966132034548798
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5180,6 +5180,33 @@ MonoBehaviour:
   visual: {fileID: 4868148605327696447}
   hitCollider: {fileID: 0}
   bodyHitsToKill: 3
+--- !u!114 &6725415357126542444
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 29c1e90a716894048871b2b6d7984548, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerAppearanceSync
+  ShowTopMostFoldoutHeaderGroup: 1
+  appearanceApplier: {fileID: 6358839518120969416}
+  appearanceCatalog: {fileID: 11400000, guid: d69f40b89e6ea85498f9b1ab577033a5, type: 2}
+--- !u!114 &868169867567880755
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8742ecc8c29ea7f44ae3c517c8d640db, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerInputReader
 --- !u!1 &8341231475677589786
 GameObject:
   m_ObjectHideFlags: 0

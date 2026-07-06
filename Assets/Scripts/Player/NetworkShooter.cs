@@ -45,9 +45,6 @@ namespace FriendSlop.Player
         [SerializeField]
         private float recoilYaw = 0.6f;
 
-        // resolved on the owner at first fire; the scene's single follow camera that drives aim.
-        private ThirdPersonCamera _ownerCamera;
-
         // master switch for server-side rewind. turn off to A/B test: with lag + a moving target, off
         // makes shots miss behind the target (server raycasts the present), on makes them hit (server
         // rewinds to where the shooter saw it). server-only effect; toggle it on the host's prefab.
@@ -125,10 +122,8 @@ namespace FriendSlop.Player
 
             // kick the camera (and thus aim) on the confirmed shot. randomize horizontal direction so
             // the muzzle climbs while drifting unpredictably left/right under rapid fire.
-            if (_ownerCamera == null)
-                _ownerCamera = Object.FindFirstObjectByType<ThirdPersonCamera>();
-            if (_ownerCamera != null)
-                _ownerCamera.AddRecoil(recoilPitch, Random.Range(-recoilYaw, recoilYaw));
+            if (ThirdPersonCamera.Instance != null)
+                ThirdPersonCamera.Instance.AddRecoil(recoilPitch, Random.Range(-recoilYaw, recoilYaw));
 
             // send only where we aimed. the server owns the when: it derives the rewind tick from its own
             // clock and our measured latency, so we never send a tick from the client's (offset) clock.

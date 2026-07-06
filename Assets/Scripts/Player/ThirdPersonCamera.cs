@@ -82,7 +82,22 @@ namespace FriendSlop.Player
         private float _scopeBlend; // 0 = third-person, 1 = fully scoped first-person (either zoom level)
         private float _zoomFovBlend; // 0 = scopeFov, 1 = scopeFovLevel2. only matters while _scopeBlend > 0
 
-        private void Awake() => _cam = GetComponent<Camera>();
+        // the scene's single follow camera, so the owning player + its shooter can reach it without a
+        // per-frame FindFirstObjectByType. set on Awake, cleared on destroy. null until the GameScene camera
+        // exists (a client's player can spawn a frame or two before it).
+        public static ThirdPersonCamera Instance { get; private set; }
+
+        private void Awake()
+        {
+            _cam = GetComponent<Camera>();
+            Instance = this;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
 
         // sets the transform this camera orbits and follows, and locks the cursor
         public void SetTarget(Transform newTarget)
