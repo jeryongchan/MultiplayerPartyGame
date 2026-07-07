@@ -48,10 +48,9 @@ namespace FriendSlop.Player
             Z = 2,
         }
 
-        // layer for the baked colliders. must match NetworkShooter.shootableMask (currently 7).
+        // layer for the baked colliders. must match SniperShooter.shootableMask (currently 7).
         [SerializeField]
         private int hitboxLayer = 7;
-
 
         [SerializeField]
         private bool drawGizmos = true; // wire gizmos for each collider when selected.

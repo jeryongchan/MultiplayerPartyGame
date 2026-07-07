@@ -6,7 +6,7 @@ namespace FriendSlop.Player
     // the sniper's red laser sight (visible to all players when scoped in). continuous data, not a one-shot
     // event, and no lag comp: nobody's hit outcome depends on it.
     //
-    // the camera (not the gun mesh) is the aim source, same ray NetworkShooter fires. the barrel and the eye
+    // the camera (not the gun mesh) is the aim source, same ray SniperShooter fires. the barrel and the eye
     // are never at the same point, so aiming the mesh's forward would diverge from the crosshair. only the
     // owner has that camera, so the owner raycasts locally and replicates the resulting world hit point; every
     // machine then draws a line from its own MuzzleTip to that point, always converging on the same spot.

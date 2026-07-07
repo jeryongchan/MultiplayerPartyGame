@@ -4974,7 +4974,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 98d75611e531fcc46a9640e79f9317df, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.NetworkShooter
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.SniperShooter
   ShowTopMostFoldoutHeaderGroup: 1
   maxRange: 200
   shootableMask:

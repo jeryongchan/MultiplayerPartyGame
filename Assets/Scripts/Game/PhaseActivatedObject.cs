@@ -2,32 +2,19 @@ using UnityEngine;
 
 namespace FriendSlop.Game
 {
-    // a pure phase-reactor: enables a set of GameObjects only during the phases you tick, disabling them
-    // otherwise. drop it on any scene object and let it drive things like the spawn-area invisible walls
-    // (active until Hunt) or the exit gate (a "gate closed" object that switches off on Hunt).
-    //
-    // this is the "conductor + reactors" pattern in action: GameFlowManager flips the phase, this
-    // component reacts, and neither knows the other's internals beyond the phase enum.
-    //
-    // local and cosmetic-ish: it toggles GameObjects on every machine off the replicated phase, so no
-    // networking of its own. use it for scene geometry/visuals whose state is fully implied by the phase.
+    // pure phase-reactor: enables a set of GameObjects only during the phases you tick, disabling them
+    // otherwise. drop on any scene object to drive things like spawn-area walls (active until Hunt) or
+    // the exit gate (switches off on Hunt). local + cosmetic-ish, no networking of its own: it toggles
+    // GameObjects on every machine off the replicated phase.
     public class PhaseActivatedObject : MonoBehaviour
     {
-        // objects that should be active only during the selected phases (e.g. spawn-area walls)
         [SerializeField]
-        private GameObject[] targets;
+        private GameObject[] targets; // objects active only during the selected phases
 
-        // phases during which the targets are active. in every other phase they're disabled.
         [SerializeField]
-        private GamePhase[] activeDuring;
+        private GamePhase[] activeDuring; // in every other phase they're disabled
 
-        private void OnEnable()
-        {
-            // GameFlowManager may spawn after this object; retry-subscribe is handled in Update-free
-            // fashion by hooking as soon as an instance exists. simplest robust approach: subscribe now
-            // if present, and also apply the current phase immediately.
-            TrySubscribe();
-        }
+        private void OnEnable() => TrySubscribe();
 
         private void OnDisable()
         {
@@ -41,7 +28,7 @@ namespace FriendSlop.Game
         {
             if (GameFlowManager.Instance == null)
                 return;
-            // idempotent: unsubscribe first so we never double-register across OnEnable/Start
+            // idempotent: unsubscribe first so we never double-register across OnEnable/Start.
             GameFlowManager.Instance.PhaseChanged -= Apply;
             GameFlowManager.Instance.PhaseChanged += Apply;
             Apply(GameFlowManager.Instance.CurrentPhase.Value);

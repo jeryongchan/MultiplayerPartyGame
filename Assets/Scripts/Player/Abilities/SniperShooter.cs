@@ -11,7 +11,7 @@ namespace FriendSlop.Player
     //
     // same shared script on every copy, but only the owner reads input and sends, and only the server decides
     // the hit (clients never declare "I hit X").
-    public class NetworkShooter : RoleGatedAbility
+    public class SniperShooter : RoleGatedAbility
     {
         [SerializeField]
         private float maxRange = 200f; // beyond this a shot simply misses.

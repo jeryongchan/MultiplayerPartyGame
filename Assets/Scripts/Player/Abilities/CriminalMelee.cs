@@ -6,7 +6,7 @@ using UnityEngine;
 namespace FriendSlop.Player
 {
     // the criminal's melee: left-click near a crowd NPC to punch it down and steal a garment. modelled like
-    // NetworkShooter: the owner reads input and asks, the server decides, and the result is replicated by the
+    // SniperShooter: the owner reads input and asks, the server decides, and the result is replicated by the
     // NPC's stream index so every machine drops the same pedestrian locally (the deterministic crowd has no
     // per-NPC networking; we replicate the reactive event, not the NPC).
     //

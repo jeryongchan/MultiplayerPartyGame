@@ -5,37 +5,33 @@ using UnityEngine;
 
 namespace FriendSlop.Game
 {
-    // server-authoritative, per-player scoreboard (CS-style: individual stats are tallied, but who wins
-    // is a team question layered on later). put one on a scene NetworkObject (the flow manager /
-    // role registry object).
+    // server-authoritative, per-player scoreboard (CS-style: individual stats are tallied, team winner is
+    // layered on later). put one on a scene NetworkObject (the flow manager / role registry object).
     //
-    // scoring: sniper eliminates a criminal gives +pointsPerKill; criminal alive at Hunt's end gives
-    // +survivalPoints; sniper hits an NPC gives npcPenalty (a small negative). scores are a running match
-    // total (accumulate every round); ResetMatch zeroes them for a fresh match. the board is a
-    // replicated NetworkList so every client renders the same numbers.
+    // scoring: sniper eliminates a criminal -> +pointsPerKill; criminal alive at Hunt's end -> +survivalPoints;
+    // sniper hits an NPC -> npcPenalty (negative). scores are a running match total (accumulate every round);
+    // ResetMatch zeroes them for a fresh match. the board is a replicated NetworkList so every client renders
+    // the same numbers.
     public class ScoreManager : NetworkBehaviour
     {
         public static ScoreManager Instance { get; private set; }
 
-        // points a sniper earns per criminal eliminated
         [SerializeField]
-        private float pointsPerKill = 1f;
+        private float pointsPerKill = 1f; // points a sniper earns per criminal eliminated
 
-        // points a criminal earns for surviving to the end of Hunt
         [SerializeField]
-        private float survivalPoints = 1f;
+        private float survivalPoints = 1f; // points a criminal earns for surviving to the end of Hunt
 
-        // points a sniper loses for hitting an innocent NPC (negative)
         [SerializeField]
-        private float npcPenalty = -0.5f;
+        private float npcPenalty = -0.5f; // points a sniper loses for hitting an innocent NPC (negative)
 
         // replicated per-player board. server-write; clients read it to render the scoreboard.
         public readonly NetworkList<PlayerScore> Scores = new NetworkList<PlayerScore>(
             writePerm: NetworkVariableWritePermission.Server);
 
-        // which team won the last resolved round (or None before the first Resolution). server-write,
-        // replicated so every client's scoreboard shows the same verdict. team is by role this round:
-        // hunters (sniper+witness) vs criminals, which equals the fixed teams since membership never crosses.
+        // which team won the last resolved round (or None before the first Resolution). team is by role
+        // this round: hunters (sniper+witness) vs criminals, which equals the fixed teams since membership
+        // never crosses.
         public readonly NetworkVariable<RoundOutcome> LastRoundWinner =
             new NetworkVariable<RoundOutcome>(RoundOutcome.None, writePerm: NetworkVariableWritePermission.Server);
 
@@ -48,9 +44,9 @@ namespace FriendSlop.Game
             base.OnDestroy();
         }
 
-        // server-only score events
+        // server-only score events.
 
-        // a sniper eliminated a criminal: +pointsPerKill to that sniper
+        // a sniper eliminated a criminal: +pointsPerKill to that sniper.
         public void RecordCriminalKill(ulong sniperClientId)
         {
             if (!IsServer)
@@ -63,7 +59,7 @@ namespace FriendSlop.Game
             });
         }
 
-        // a sniper hit an innocent NPC: apply the penalty
+        // a sniper hit an innocent NPC: apply the penalty.
         public void RecordNpcHit(ulong sniperClientId)
         {
             if (!IsServer)
@@ -75,10 +71,9 @@ namespace FriendSlop.Game
             });
         }
 
-        // a criminal reached the Exit and escaped the street (GDD Resolution: "criminal reaches exit
-        // gives +1 criminal team"). scored the same as surviving to the end, the criminal got away, so it
-        // reuses the survival counter/points. the caller removes the escapee (SetAlive(false)) right after,
-        // which also stops AwardSurvivors from awarding them a second time at Hunt's end.
+        // a criminal reached the Exit and escaped. scored the same as surviving to the end, so it reuses
+        // the survival counter/points. the caller removes the escapee (SetAlive(false)) right after, which
+        // also stops AwardSurvivors from awarding them a second time at Hunt's end.
         public void RecordCriminalEscape(ulong criminalClientId)
         {
             if (!IsServer)
@@ -145,7 +140,7 @@ namespace FriendSlop.Game
             LastRoundWinner.Value = RoundOutcome.None;
         }
 
-        // this match's per-player point total (0 if the player has no row yet)
+        // this match's per-player point total (0 if the player has no row yet).
         private float TotalFor(ulong clientId)
         {
             for (int i = 0; i < Scores.Count; i++)
@@ -154,7 +149,7 @@ namespace FriendSlop.Game
             return 0f;
         }
 
-        // live clientId to current role, read off the spawned player objects (server-side truth)
+        // live clientId -> current role, read off the spawned player objects (server-side truth).
         private IEnumerable<KeyValuePair<ulong, PlayerRole>> RolesByClient()
         {
             foreach (var kv in NetworkManager.Singleton.SpawnManager.SpawnedObjects)
@@ -162,7 +157,7 @@ namespace FriendSlop.Game
                     yield return new KeyValuePair<ulong, PlayerRole>(pc.OwnerClientId, pc.Role.Value);
         }
 
-        // find (or create) a player's row and apply a change, writing it back into the NetworkList
+        // find (or create) a player's row and apply a change, writing it back into the NetworkList.
         private void Mutate(ulong clientId, System.Func<PlayerScore, PlayerScore> change)
         {
             for (int i = 0; i < Scores.Count; i++)
@@ -173,8 +168,7 @@ namespace FriendSlop.Game
                     return;
                 }
             }
-            // no row yet, start one at zero and apply the change
-            Scores.Add(change(new PlayerScore { ClientId = clientId }));
+            Scores.Add(change(new PlayerScore { ClientId = clientId })); // no row yet, start one at zero
         }
     }
 }
