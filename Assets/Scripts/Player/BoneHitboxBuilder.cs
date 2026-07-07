@@ -6,49 +6,41 @@ using UnityEditor;
 
 namespace FriendSlop.Player
 {
-    // editor tool that bakes per-bone hitbox colliders into the prefab so the shooter can tell a real
-    // limb hit from a shot through a gap between the arms/legs (which the old single body-capsule
-    // wrongly counted as a hit).
+    // editor tool that bakes per-bone hitbox colliders into the prefab, so the shooter can tell a real limb hit
+    // from a shot through a gap between the arms/legs (which the old single body-capsule wrongly counted).
     //
-    // right-click the component -> "Bake Bone Hitboxes" to walk _defaults, find each named bone in this
-    // character's skeleton, and parent a persistent child GameObject carrying a sized primitive collider
-    // on the shootable hitbox layer. because each collider is a child of its bone, it follows the
-    // animation for free, no per-frame code. baking (vs building at runtime in Awake) means the colliders
-    // live in the prefab asset: visible and tunable in the editor, gizmo-drawable without Play mode, and
-    // no per-spawn allocation. re-baking is idempotent (it clears the previous bake first).
+    // right-click the component -> Bake Bone Hitboxes to walk `definitions`, find each named bone, and parent a
+    // persistent child carrying a sized collider on the hitbox layer. each collider is a child of its bone, so
+    // it follows the animation for free. baking (vs building at runtime) means the colliders live in the prefab:
+    // visible/tunable in the editor, gizmo-drawable without play mode, no per-spawn alloc. re-baking is
+    // idempotent (clears the previous bake first). HitboxHistory reads them back via Hitboxes for lag-comp.
     //
-    // HitboxHistory reads the baked colliders back via Hitboxes (it collects the BoneHitbox-tagged
-    // children) for lag-comp rewind.
-    //
-    // one builder works for both the Player and NPC prefabs (same ithappy rig). NPCs can bake a coarser
-    // subset via overrideDefinitions if we want fewer colliders on the crowd later.
+    // one builder works for both the Player and NPC prefabs (same ithappy rig); trim rows on the NPC prefab for
+    // a coarser crowd set.
     public class BoneHitboxBuilder : MonoBehaviour
     {
-        // shape of a bone collider. capsule for limbs/torso (a swept sphere along the bone), sphere for
-        // the head (roughly ball-shaped, no meaningful long axis).
+        // capsule for limbs/torso (swept sphere along the bone), sphere for the head (no meaningful long axis).
         public enum Shape
         {
             Capsule,
             Sphere,
         }
 
-        // one collider recipe: which bone to glue to, what shape, and its dimensions in the bone's local
-        // space. length = capsule height along its local axis; radius = capsule/sphere radius; offset nudges
-        // the collider along the bone so it spans the limb segment rather than sitting at the joint pivot.
+        // one collider recipe, dimensions in the bone's local space. length = capsule height along its axis;
+        // offset nudges the collider along the bone so it spans the segment rather than sitting at the pivot.
         [System.Serializable]
         public struct Definition
         {
             public string boneName;
             public Shape shape;
             public float radius;
-            public float length; // capsule only; ignored for spheres
-            public Vector3 offset; // local-space centre relative to the bone pivot
-            public CapsuleAxis axis; // capsule only; which local axis the length runs along
-            public HitZone zone; // Head = instant kill; Body = costs several hits (default)
+            public float length; // capsule only.
+            public Vector3 offset; // local-space centre relative to the bone pivot.
+            public CapsuleAxis axis; // capsule only; which local axis the length runs along.
+            public HitZone zone; // Head = instant kill; Body = costs several hits (default).
         }
 
-        // Unity's CapsuleCollider.direction encoding: 0 = X, 1 = Y, 2 = Z. ithappy bones point "down the
-        // bone" along local Y (standard Mixamo-style), so limbs use Y.
+        // CapsuleCollider.direction encoding. ithappy bones point down the bone along local Y (Mixamo-style).
         public enum CapsuleAxis
         {
             X = 0,
@@ -56,20 +48,19 @@ namespace FriendSlop.Player
             Z = 2,
         }
 
-        // layer for the baked hitbox colliders. must match NetworkShooter.shootableMask (the
-        // project's player-hitbox layer, currently 7).
+        // layer for the baked colliders. must match NetworkShooter.shootableMask (currently 7).
         [SerializeField]
         private int hitboxLayer = 7;
 
-        // draw wire gizmos for each baked collider when this object is selected
-        [SerializeField]
-        private bool drawGizmos = true;
 
-        // name prefix on every baked child, so the collector and the clear step can find them unambiguously
+        [SerializeField]
+        private bool drawGizmos = true; // wire gizmos for each collider when selected.
+
+        // name prefix on every baked child, so the collector and clear step find them unambiguously.
         private const string HitboxNamePrefix = "Hitbox_";
 
-        // the baked colliders, collected from the BoneHitbox children under the skeleton. order follows the
-        // hierarchy walk (stable for a given prefab), so history can index them positionally.
+        // the baked colliders, from the BoneHitbox children. order follows the hierarchy walk (stable per
+        // prefab), so history can index them positionally.
         public IReadOnlyList<Transform> Hitboxes
         {
             get
@@ -81,21 +72,17 @@ namespace FriendSlop.Player
             }
         }
 
-        // the collider table, exposed in the Inspector so you can tune each bone's radius/length/offset and
-        // re-bake without touching code. pre-filled with values derived from the actual ithappy Cute_Characters
-        // rig bone distances (measured joint-to-child-joint segment lengths), not eyeballed: length = segment +
-        // a small cap overhang; offset.y = segment/2 so the capsule spans this joint to the next one instead
-        // of sitting at the pivot. measured segments: arm 0.141, forearm 0.116, thigh 0.150, shin 0.165,
-        // torso(Spine->Neck) 0.160, hips->spine 0.093. radii are proportioned to this small "cute" rig (thin
-        // limbs, chunky torso). note: no separate hand/foot hitboxes, the forearm/shin capsules extend to
-        // cover them; fingers/toes are cosmetic. for a coarser NPC set, just delete rows here on that prefab.
-        [Tooltip("Per-bone collider recipes. Edit and re-bake (right-click header -> Bake Bone Hitboxes). " +
-                 "Reset via right-click header -> Reset To Rig Defaults.")]
+        // the collider table, exposed in the Inspector so you can tune each bone and re-bake without code.
+        // values are derived from the actual ithappy Cute_Characters rig (measured joint->child-joint
+        // segments), not eyeballed: length = segment + a small cap overhang; offset.y = segment/2 so the
+        // capsule spans joint to joint. radii proportioned to this small "cute" rig (thin limbs, chunky torso).
+        // no separate hand/foot hitboxes: the forearm/shin capsules extend to cover them. delete rows on the
+        // NPC prefab for a coarser set.
         [SerializeField]
         private Definition[] definitions = DefaultDefinitions();
 
-        // the rig-measured defaults, as a factory so both the field initializer and the reset menu share one
-        // source. (a field initializer can't reference another instance field, hence a static method.)
+        // the rig-measured defaults, as a factory so the field initializer and the reset menu share one source
+        // (a field initializer can't reference another instance field, hence a static method).
         private static Definition[] DefaultDefinitions() => new Definition[]
         {
             new() { boneName = "Head",         shape = Shape.Sphere,  radius = 0.075f, offset = new Vector3(0, 0.03f,  0), zone = HitZone.Head },
@@ -111,16 +98,15 @@ namespace FriendSlop.Player
         };
 
 #if UNITY_EDITOR
-        // right-click the component header -> "Bake Bone Hitboxes". idempotent: clears any prior bake first,
-        // then creates one persistent child collider per definition under its bone. editor-only, the colliders
-        // are authored into the prefab, not spawned at runtime.
+        // idempotent: clears any prior bake, then creates one persistent child collider per definition under
+        // its bone. editor-only; the colliders are authored into the prefab, not spawned at runtime.
         [ContextMenu("Bake Bone Hitboxes")]
         private void Bake()
         {
             ClearBakedInternal();
 
-            // index every Transform in the skeleton once by name, so multiple defs targeting the same rig
-            // don't each pay a full-tree walk. first match wins (the rig has no duplicate bone names).
+            // index every Transform once by name so multiple defs don't each pay a full-tree walk. first match
+            // wins (the rig has no duplicate bone names).
             var bones = new Dictionary<string, Transform>();
             foreach (var t in GetComponentsInChildren<Transform>(true))
                 bones.TryAdd(t.name, t);
@@ -146,7 +132,7 @@ namespace FriendSlop.Player
                 Debug.Log($"{name}: BoneHitboxBuilder baked {made} bone hitboxes.", this);
         }
 
-        // right-click the component header -> "Clear Bone Hitboxes". removes every baked child.
+        // removes every baked child.
         [ContextMenu("Clear Bone Hitboxes")]
         private void ClearBaked()
         {
@@ -162,8 +148,8 @@ namespace FriendSlop.Player
             return existing.Count;
         }
 
-        // right-click the component header -> "Reset To Rig Defaults". restores the measured ithappy-rig table
-        // if you've edited the definitions in the Inspector and want the tuned baseline back. does not re-bake.
+        // restores the measured ithappy-rig table if you've edited the definitions and want the baseline back.
+        // does not re-bake.
         [ContextMenu("Reset To Rig Defaults")]
         private void ResetToDefaults()
         {
@@ -173,9 +159,8 @@ namespace FriendSlop.Player
             Debug.Log($"{name}: BoneHitboxBuilder definitions reset to rig defaults ({definitions.Length} rows).", this);
         }
 
-        // create one child-of-bone GameObject with a sized collider on the hitbox layer. local scale is
-        // forced to 1 so the authored radius/length are honoured regardless of any bone scaling. registered
-        // with Undo so a mis-bake is reversible, and marked dirty so the prefab persists the new children.
+        // one child-of-bone with a sized collider on the hitbox layer. local scale forced to 1 so the authored
+        // radius/length hold regardless of bone scaling. undo-registered and dirtied so the prefab persists it.
         private void CreateCollider(Definition def, Transform bone)
         {
             var go = new GameObject($"{HitboxNamePrefix}{def.boneName}") { layer = hitboxLayer };

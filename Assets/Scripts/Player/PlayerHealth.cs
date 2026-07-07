@@ -3,58 +3,41 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // server-authoritative round health for a player. owns the replicated alive/down state and the server-only
-    // body-HP count, and hides/shows the mesh + shootable hitbox on every copy when the player is downed. split
-    // out of NetworkPlayerController so the controller is pure movement netcode: this component is
-    // the single home for "is this player alive, and what happens when they're hit."
+    // server-authoritative round health. owns the replicated alive/down state and the server-only body-HP
+    // count, and hides/shows the mesh + shootable hitbox on every copy when downed. split out of the
+    // controller so it stays pure movement netcode.
     public class PlayerHealth : NetworkBehaviour
     {
-        // the visual mesh root, hidden when the player is downed so a corpse doesn't linger. same GameObject the
-        // controller render-interpolates; referenced here separately so health stays self-contained.
         [SerializeField]
-        private Transform visual;
+        private Transform visual; // mesh root, hidden when downed so no corpse lingers.
 
-        // the player's shootable body hitbox (the dedicated CapsuleCollider NetworkShooter raycasts). hidden
-        // together with the mesh when the player is downed, so a corpse can't be shot again. optional; if
-        // unassigned, only the mesh hides.
         [SerializeField]
-        private Collider hitCollider;
+        private Collider hitCollider; // shootable body; hidden with the mesh so a corpse can't be re-shot. optional.
 
-        // how many body hits it takes to down this player. a head hit is always an instant kill regardless.
-        // server-only tuning; exposed so you can tweak survivability in the Inspector while testing.
         [SerializeField]
-        private int bodyHitsToKill = 3;
+        private int bodyHitsToKill = 3; // body hits to down; a head hit is always an instant kill.
 
-        // remaining body hits before this player goes down, server-side only (never networked; clients don't
-        // need the number, only the resulting IsAlive flip). refilled to bodyHitsToKill on spawn/respawn.
-        private int _hp;
+        private int _hp; // remaining body hits, server-only (clients only need the IsAlive flip). refilled on spawn/respawn.
 
-        // alive/down state for the round. server-write, read everywhere. a criminal shot during Hunt is
-        // set false: its mesh + hitbox hide on every copy (OnValueChanged) and, on the owner, its input is
-        // frozen so it spectates in place until the next round. Revive() brings it back. defaults true so
-        // nobody spawns dead (and non-round systems that never touch it see a live player).
+        // alive/down state for the round. server-write, read everywhere. a downed criminal hides its mesh +
+        // hitbox on every copy and freezes input on the owner. defaults true so nobody spawns dead.
         public readonly NetworkVariable<bool> IsAlive =
             new NetworkVariable<bool>(true, writePerm: NetworkVariableWritePermission.Server);
 
         public override void OnNetworkSpawn()
         {
             if (IsServer)
-                _hp = bodyHitsToKill; // start the round at full body HP
+                _hp = bodyHitsToKill;
 
-            // down/alive visuals: hide the mesh + hitbox on every copy when a player is downed. apply the
-            // current value now (covers late joiners who arrive mid-round) and react to changes after.
+            // apply the current value now (covers late joiners mid-round), then react to changes.
             IsAlive.OnValueChanged += OnAliveChanged;
             ApplyAliveVisual(IsAlive.Value);
         }
 
-        public override void OnNetworkDespawn()
-        {
-            IsAlive.OnValueChanged -= OnAliveChanged;
-        }
+        public override void OnNetworkDespawn() => IsAlive.OnValueChanged -= OnAliveChanged;
 
-        // server-only. apply one hit in the given zone. a head hit downs instantly; a body hit decrements
-        // HP and only downs at zero. returns true if this hit was the killing blow (so the caller can score
-        // the kill exactly once). no-ops if already down. body HP refills on respawn/SetAlive(true).
+        // server-only. apply one hit: head downs instantly, body decrements and downs at zero. returns true on
+        // the killing blow (so the caller scores the kill once). no-ops if already down.
         public bool TakeHit(HitZone zone)
         {
             if (!IsServer || !IsAlive.Value)
@@ -66,31 +49,27 @@ namespace FriendSlop.Player
                 return true;
             }
 
-            _hp--;
-            if (_hp <= 0)
+            if (--_hp <= 0)
             {
                 IsAlive.Value = false;
                 return true;
             }
-            return false; // survived, a body hit that didn't kill
+            return false;
         }
 
-        // server-only. mark this player down (or revive). down players hide their mesh + hitbox (so they
-        // can't be shot again) on every copy and, on the owner, freeze input to spectate in place. called
-        // by ExitZone when a criminal escapes.
+        // server-only. mark down or revive; reviving refills body HP. called by ExitZone when a criminal escapes.
         public void SetAlive(bool alive)
         {
             if (!IsServer)
                 return;
             IsAlive.Value = alive;
             if (alive)
-                _hp = bodyHitsToKill; // reviving refills body HP
+                _hp = bodyHitsToKill;
         }
 
-        // server-only. revive for a new round: alive again with full body HP.
-        public void Revive() => SetAlive(true);
+        public void Revive() => SetAlive(true); // server-only, for a new round.
 
-        // runs on every copy when IsAlive flips: show/hide the mesh + shootable hitbox
+
         private void OnAliveChanged(bool _, bool alive) => ApplyAliveVisual(alive);
 
         private void ApplyAliveVisual(bool alive)

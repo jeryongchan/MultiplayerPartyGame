@@ -4,8 +4,8 @@ using FriendSlop.Crowd;
 
 namespace FriendSlop.Characters
 {
-    // syncs the character's Animator with the movement state (NetworkPlayerController or Npc).
-    // drives the "Speed" parameter for Idle (0), Walk (1), and Sprint (2) blending.
+    // drives the Animator from the movement state (NetworkPlayerController or Npc): the Speed blend
+    // (Idle 0 / Walk 1 / Run 2), the Aim layer, and the exotic-pose override layer.
     [RequireComponent(typeof(Animator))]
     public class PlayerAnimationHandler : MonoBehaviour
     {
@@ -15,26 +15,22 @@ namespace FriendSlop.Characters
         [SerializeField]
         private float aimWeightLerpSpeed = 10f;
 
+        [SerializeField]
+        private float poseWeightLerpSpeed = 12f;
+
         private Animator _animator;
         private NetworkPlayerController _playerController;
         private Npc _npc;
 
         private static readonly int SpeedHash = Animator.StringToHash("Speed");
         private static readonly int DownedHash = Animator.StringToHash("Downed");
-
-        // int param on the Pose override layer selecting which exotic pose to play (the CharacterPose enum
-        // value, 0 = None). read by the layer's transitions. named so a stale controller variant lacking it
-        // is guarded via HasParam like Downed.
-        private static readonly int PoseHash = Animator.StringToHash("PoseIndex");
+        private static readonly int PoseHash = Animator.StringToHash("PoseIndex"); // which exotic pose (the CharacterPose value).
 
         // set once in Awake: layer indices looked up by name so layers can be reordered without breaking these.
         // Aim = upper-body aim stance (weight driven by IsScoped). Pose = full-body exotic override (weight
         // driven by CurrentPose being an exotic pose; the clip chosen by the PoseIndex int param).
         private int _aimLayerIndex = -1;
         private int _poseLayerIndex = -1;
-
-        [SerializeField]
-        private float poseWeightLerpSpeed = 12f;
 
         private void Awake()
         {
@@ -49,13 +45,11 @@ namespace FriendSlop.Characters
             }
         }
 
-        // true for the criminal exotic poses that ride the full-body Pose override layer (everything except
-        // None and the aim stance Scoped, which is the Aim layer's job)
+        // the criminal exotic poses on the full-body Pose layer (everything but None and the aim stance Scoped).
         private static bool IsExoticPose(CharacterPose p) =>
             p != CharacterPose.None && p != CharacterPose.Scoped;
 
-        // true if the live animator controller actually declares this parameter, guards SetBool/SetTrigger
-        // against a "Parameter does not exist" throw when a controller variant lacks it (or a stale runtime).
+        // guards SetBool/SetInteger against a "parameter does not exist" throw on a controller variant lacking it.
         private bool HasParam(int hash)
         {
             foreach (var p in _animator.parameters)
@@ -72,23 +66,18 @@ namespace FriendSlop.Characters
 
             if (_playerController != null)
             {
-                float speed = _playerController.CurrentSpeed;
-                if (speed > 0.1f)
-                {
+                if (_playerController.CurrentSpeed > 0.1f)
                     targetSpeed = _playerController.IsSprinting ? 2f : 1f;
-                }
             }
             else if (_npc != null)
             {
-                // a robbed NPC plays its fall/lie state (driven by the Downed bool) and holds; don't also
-                // feed it a walk speed. set the bool once it's down; it never clears (down for the round).
+                // a robbed NPC holds its fall/lie state (the Downed bool); don't also feed it a walk speed.
                 if (_npc.Downed)
                 {
                     if (HasParam(DownedHash))
                         _animator.SetBool(DownedHash, true);
                 }
-                // blend by the NPC's actual speed, so a loitering NPC (CurrentSpeed ~0) idles instead of
-                // walking on the spot. any real motion reads as a walk.
+                // blend by the NPC's actual speed, so a loitering NPC (~0) idles instead of walking on the spot.
                 else if (!_npc.Finished && _npc.CurrentSpeed > 0.1f)
                 {
                     targetSpeed = 1f;
@@ -107,10 +96,9 @@ namespace FriendSlop.Characters
                 );
             }
 
-            // exotic pose (handstand/shoelace/split): full-body override layer. runs on every copy including
-            // the server; the server's Animator must hold the same pose so the per-bone hitboxes (children of
-            // this rig) are posed when HitboxHistory records/rewinds them, or lag-comp hits the wrong shape.
-            // PoseIndex picks the clip; the layer weight blends the whole override in/out.
+            // exotic pose (handstand/shoelace/split): full-body override layer. runs on every copy including the
+            // server, so the server's Animator holds the same pose and the per-bone hitboxes are posed when
+            // HitboxHistory rewinds them (or lag-comp hits the wrong shape). PoseIndex picks the clip.
             if (_poseLayerIndex >= 0 && _playerController != null)
             {
                 CharacterPose pose = _playerController.CurrentPose;

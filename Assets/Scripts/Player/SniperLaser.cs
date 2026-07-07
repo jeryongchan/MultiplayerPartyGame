@@ -3,18 +3,13 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // the sniper's red laser sight (GDD: "when scoped in, a red laser beam is emitted and visible to
-    // all players"). continuous data, not a one-shot event; category 1 in the networking guide
-    // (lightweight, no lag comp needed, nobody's hit outcome depends on it).
+    // the sniper's red laser sight (visible to all players when scoped in). continuous data, not a one-shot
+    // event, and no lag comp: nobody's hit outcome depends on it.
     //
-    // the camera (not the gun mesh) is the real aim source, same ray NetworkShooter fires from,
-    // screen-center through the owner's camera, pitch included. the gun barrel and the eye are never
-    // at the same point, so aiming the mesh's own forward would diverge from the crosshair (this is
-    // the standard "gun-to-crosshair convergence" every third-person shooter handles). only the owner
-    // has that camera, so the owner raycasts locally and replicates the resulting world hit point;
-    // every machine (owner included) then just draws a line from its own MuzzleTip to that point,
-    // no direction math needed on remotes, and the beam always visually converges on the same spot
-    // regardless of the gun's current animated pose.
+    // the camera (not the gun mesh) is the aim source, same ray NetworkShooter fires. the barrel and the eye
+    // are never at the same point, so aiming the mesh's forward would diverge from the crosshair. only the
+    // owner has that camera, so the owner raycasts locally and replicates the resulting world hit point; every
+    // machine then draws a line from its own MuzzleTip to that point, always converging on the same spot.
     [RequireComponent(typeof(LineRenderer))]
     public class SniperLaser : NetworkBehaviour
     {
@@ -30,13 +25,13 @@ namespace FriendSlop.Player
         private NetworkPlayerController _controller;
         private LineRenderer _line;
 
-        // replicated world-space point the beam should reach, written by the owner each tick from its
-        // own camera ray. everyone (including the owner) draws MuzzleTip -> this point.
+        // world point the beam reaches, written by the owner each tick from its camera ray. everyone (owner
+        // included) draws MuzzleTip -> here.
         private readonly NetworkVariable<Vector3> _aimPoint =
             new NetworkVariable<Vector3>(writePerm: NetworkVariableWritePermission.Owner);
 
-        // whether the beam should be showing at all right now, replicated alongside the point (can't
-        // infer "off" from a zero point, the origin itself is a valid, reachable world position).
+        // whether the beam shows at all, replicated alongside the point (can't infer "off" from a zero point:
+        // the origin itself is a valid world position).
         private readonly NetworkVariable<bool> _visible =
             new NetworkVariable<bool>(writePerm: NetworkVariableWritePermission.Owner);
 
@@ -47,10 +42,7 @@ namespace FriendSlop.Player
             _line.enabled = false;
         }
 
-        public override void OnNetworkSpawn()
-        {
-            NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
-        }
+        public override void OnNetworkSpawn() => NetworkManager.NetworkTickSystem.Tick += OnNetworkTick;
 
         public override void OnNetworkDespawn()
         {
@@ -58,8 +50,7 @@ namespace FriendSlop.Player
                 NetworkManager.NetworkTickSystem.Tick -= OnNetworkTick;
         }
 
-        // owner-only: figure out where the scope is actually pointing (screen-center camera ray, same
-        // as NetworkShooter's shot) and replicate that world point.
+        // owner-only: resolve where the scope points (screen-center camera ray, same as the shot) and replicate it.
         private void OnNetworkTick()
         {
             if (!IsOwner || _controller == null)
@@ -80,17 +71,14 @@ namespace FriendSlop.Player
                 : aim.origin + aim.direction * maxRange;
         }
 
-        // runs every frame on every copy: draw a line from this machine's own MuzzleTip to the
-        // replicated aim point. no raycast needed here, the owner already resolved where the beam ends.
+        // every frame, every copy: draw MuzzleTip -> the replicated aim point (the owner already resolved the end).
         private void Update()
         {
             if (_line == null)
                 return;
 
-            // the owner never sees their own beam, they already know where they're aiming (scope
-            // crosshair), and the line just streaks across their scope view. only other players read it
-            // as the "sniper is watching" tell (GDD). the owner still writes the aim point above so
-            // everyone else can draw it; it's only the local draw that's suppressed here.
+            // the owner never sees its own beam: it already knows where it's aiming (the crosshair), and the
+            // line just streaks across the scope. only other players read it as the "sniper is watching" tell.
             if (IsOwner || !_visible.Value || muzzleTip == null)
             {
                 _line.enabled = false;

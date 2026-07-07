@@ -4,45 +4,38 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // server-only rolling history of this character's per-bone hitbox world transforms, indexed by the
-    // shared network tick (NetworkManager.ServerTime.Tick, synchronized across all machines, unlike the
-    // per-player movement tick). the shooter rewinds these hitboxes to a past tick to validate a
-    // lag-compensated shot ("server-side rewind"), then restores them. this is invisible bookkeeping that
-    // only ever runs on the server's copies; clients never see the momentary rewind.
+    // server-only rolling history of this character's per-bone hitbox world transforms, keyed by the shared
+    // network tick (ServerTime.Tick, synced across machines unlike the per-player movement tick). the shooter
+    // rewinds these to a past tick to validate a lag-compensated shot, then restores them. invisible
+    // bookkeeping on the server's copies only; clients never see the momentary rewind.
     //
-    // now pose-correct: instead of one body-capsule position, it records the world position and rotation
-    // of every per-bone collider built by BoneHitboxBuilder. rewinding restores the whole posed
-    // skeleton at that tick, so a shot that grazed a swinging arm hits the arm and a shot through the gap
-    // between the legs misses, exactly as the shooter saw it. storage is server-local RAM only; nothing
-    // here is networked (~0 bandwidth).
+    // pose-correct: it records world position and rotation of every per-bone collider built by
+    // BoneHitboxBuilder, so rewinding restores the whole posed skeleton at that tick (a shot grazing a swinging
+    // arm hits the arm; one through the gap between the legs misses). server-local RAM only, ~0 bandwidth.
     //
-    // minimal first pass: snaps to the exact recorded tick (we record every tick, so any tick inside the
-    // window exists). a polished version would interpolate between the two bracketing snapshots.
+    // first pass snaps to the exact recorded tick (we record every tick, so any tick in the window exists); a
+    // polished version would interpolate between the two bracketing snapshots.
     public class HitboxHistory : NetworkBehaviour
     {
-        // source of the per-bone colliders to record. auto-found on this object (or children) if left unset.
         [SerializeField]
-        private BoneHitboxBuilder builder;
+        private BoneHitboxBuilder builder; // source of the colliders to record; found on this object/children if unset.
 
-        // how long to keep history. Unity DOTS / Valve recommend ~250-500ms; peer-hosted games keep it
-        // tighter to limit host advantage. keep at least the shooter's maxRewindSeconds so its rewinds
-        // land inside the recorded window.
+        // how long to keep history. Valve/DOTS recommend ~250-500ms; peer-hosted keeps it tight to limit host
+        // advantage. keep >= the shooter's maxRewindSeconds so its rewinds land inside the window.
         [SerializeField]
         private float historySeconds = 0.5f;
 
-        // the colliders we record/rewind, captured once on spawn (order is stable across the session)
-        private Transform[] _bones;
+        private Transform[] _bones; // colliders we record/rewind, captured on spawn (order stable across the session).
 
-        // ring of per-tick snapshots. _posBuffer[tickSlot * _bones.Length + boneIndex] is one bone's world
-        // position at that tick; _rotBuffer likewise for rotation. flat arrays avoid a jagged-array alloc
-        // per tick.
+        // ring of per-tick snapshots. _posBuffer[tickSlot * _bones.Length + boneIndex] is one bone's world pos
+        // at that tick; _rotBuffer likewise. flat arrays avoid a jagged-array alloc per tick.
         private Vector3[] _posBuffer;
         private Quaternion[] _rotBuffer;
-        private int _slots; // number of tick slots in the ring
-        private int _count; // how many ticks recorded so far (caps at _slots)
+        private int _slots; // tick slots in the ring.
+        private int _count; // ticks recorded so far (caps at _slots).
         private int _newestTick = int.MinValue;
 
-        // present-world transforms saved by Rewind() so Restore() can put everything back
+        // present-world transforms saved by Rewind() so Restore() can put everything back.
         private Vector3[] _restorePos;
         private Quaternion[] _restoreRot;
         private bool _rewound;
@@ -89,8 +82,7 @@ namespace FriendSlop.Player
                 NetworkManager.NetworkTickSystem.Tick -= RecordTick;
         }
 
-        // append this tick's posed skeleton (every bone collider's world pos+rot) to the ring. server,
-        // once per shared network tick.
+        // append this tick's posed skeleton (every bone collider's world pos+rot) to the ring, once per shared tick.
         private void RecordTick()
         {
             if (_bones == null)
@@ -109,9 +101,8 @@ namespace FriendSlop.Player
                 _count++;
         }
 
-        // move every bone collider to where it was at tick, clamped into whatever history we actually
-        // have (the ring may not be full yet early in the match). saves the present transforms so
-        // Restore() can put them back. no-ops if there's no history yet.
+        // move every bone collider to where it was at `tick`, clamped into whatever history we have (the ring
+        // may not be full early in the match). saves the present transforms for Restore(). no-ops if empty.
         public void Rewind(int tick)
         {
             if (_bones == null || _count == 0)
@@ -132,7 +123,7 @@ namespace FriendSlop.Player
             _rewound = true;
         }
 
-        // put every bone collider back where it was before Rewind(). safe to call even if Rewind() was skipped.
+        // put every bone collider back where it was before Rewind(). safe even if Rewind() was skipped.
         public void Restore()
         {
             if (!_rewound)
@@ -146,7 +137,7 @@ namespace FriendSlop.Player
             _rewound = false;
         }
 
-        // positive modulo, so a negative tick still maps to a valid ring index
+        // positive modulo, so a negative tick still maps to a valid ring index.
         private static int Mod(int a, int n) => ((a % n) + n) % n;
     }
 }

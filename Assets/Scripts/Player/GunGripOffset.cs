@@ -3,9 +3,9 @@ using UnityEngine;
 
 namespace FriendSlop.Characters
 {
-    // blends the gun's local position/rotation (relative to RightHand) between a hip-hold offset and
-    // an aim-hold offset. the two poses (locomotion vs the Aim layer's Firing Rifle clip) rotate the
-    // hand differently, so one fixed offset looks wrong in at least one of them.
+    // blends the gun's local position/rotation (relative to RightHand) between a hip-hold and an aim-hold
+    // offset. the two poses (locomotion vs the Aim layer's firing clip) hold the hand differently, so one
+    // fixed offset looks wrong in at least one of them.
     [RequireComponent(typeof(Transform))]
     public class GunGripOffset : MonoBehaviour
     {
@@ -15,22 +15,21 @@ namespace FriendSlop.Characters
         [SerializeField]
         private float blendSpeed = 10f;
 
-        [Header("Hip-fire hold (idle/walk/run)")]
         [SerializeField]
-        private Vector3 hipLocalPosition;
+        private Vector3 hipLocalPosition; // hip-fire hold (idle/walk/run).
 
         [SerializeField]
         private Vector3 hipLocalEulerAngles;
 
-        [Header("Aim hold (scoped)")]
         [SerializeField]
-        private Vector3 aimLocalPosition;
+        private Vector3 aimLocalPosition; // aim hold (scoped).
 
         [SerializeField]
         private Vector3 aimLocalEulerAngles;
 
         private float _blend;
 
+        // seed both offsets from the current transform so a fresh add starts sane.
         private void Reset()
         {
             hipLocalPosition = transform.localPosition;
@@ -45,7 +44,7 @@ namespace FriendSlop.Characters
                 playerController = GetComponentInParent<NetworkPlayerController>();
         }
 
-        private void LateUpdate()
+        private void LateUpdate() // after the Animator poses the arm for the frame.
         {
             if (playerController == null)
                 return;

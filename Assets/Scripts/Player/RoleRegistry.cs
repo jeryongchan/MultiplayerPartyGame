@@ -4,47 +4,31 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // server-authoritative source of truth for "which role does each connected client play." roles enter
-    // through exactly one write path, SetRoleRpc, no matter who calls it. today that caller is a debug
-    // button; later it's the matchmaking/lobby system. same door.
+    // server-authoritative source of truth for "which role does each client play." roles enter through exactly
+    // one write path (SetRoleRpc) no matter who calls it: today a debug key, later the lobby, same door. put it
+    // on a single scene NetworkObject (session-global, one per match). server-only state: clients never read
+    // this, they're teleported to the spawn the server picked.
     //
-    // put this on a single scene NetworkObject (not the player prefab, it's session-global, one per
-    // match). server-only state: clients never read this dictionary, they just get teleported to the
-    // spawn the server picked from it (via NetworkPlayerController.OnNetworkSpawn).
+    // current flow (approach B, "re-spawn on role change", debug-friendly): the player spawns defaulting to
+    // Sniper, then a role pick re-teleports it. the visible pop is fine for a debug tool.
     //
-    // current flow (approach B, "re-spawn on role change", debug-friendly): client's player object spawns
-    // and defaults to Sniper (registry empty for that client); client picks a role, calling SetRoleRpc,
-    // and the server records clientId to role; server re-teleports that client's player to the new role's
-    // spawn point. you can flip a player's role live to test both spawn sets. the visible "pop" to the new
-    // spot is acceptable for a debug tool.
-    //
-    // future direction (approach A, "pick before spawn", the real lobby): role is chosen in a pre-game
-    // screen before the player object exists, so there is no pop, the player simply spawns at the right
-    // place the first time. to get there: gate player-object spawn behind connection approval (or a
-    // "ready"/start-match step) so the server already holds the client's role in this registry before it
-    // spawns their NetworkObject; the lobby UI calls the same SetRoleRpc, only the timing and the caller
-    // change, not the data path. OnNetworkSpawn already reads GetRole(), so once the role is registered
-    // pre-spawn it just works with no re-teleport. because every role write already funnels through
-    // SetRoleRpc and every spawn already reads GetRole, swapping the debug button for a lobby is additive,
-    // this class doesn't change.
+    // future (approach A, the real lobby): role is chosen pre-game before the player object exists, so there's
+    // no pop, the player just spawns in the right place. that only needs a spawn gate so the role is registered
+    // before OnNetworkSpawn (which already reads GetRole). the lobby calls the same SetRoleRpc, so the swap is
+    // additive and this class doesn't change.
     public class RoleRegistry : NetworkBehaviour
     {
         public static RoleRegistry Instance { get; private set; }
 
-        // server-only. clients never touch this, they're told where to spawn via authoritative state.
+        // server-only. clients never touch this; they're told where to spawn via authoritative state.
         private readonly Dictionary<ulong, PlayerRole> _roles = new();
 
-        // fixed teams for the match, frozen once at the first RoleAssign (BuildTeams). membership does not
-        // change round-to-round; only which hunter is the Witness rotates within _hunters. cleared by
-        // ResetTeams at match start so a new match re-splits. (minimal: split is a simple size rule now;
-        // a real lobby will populate these instead.)
+        // fixed teams, frozen once at the first RoleAssign (BuildTeams). membership doesn't change round-to-
+        // round; only which hunter is the Witness rotates. cleared by ResetTeams at match start.
         private readonly List<ulong> _hunters = new();
         private readonly List<ulong> _criminals = new();
 
-        private void Awake()
-        {
-            Instance = this;
-        }
+        private void Awake() => Instance = this;
 
         public override void OnDestroy()
         {
@@ -53,17 +37,16 @@ namespace FriendSlop.Player
             base.OnDestroy();
         }
 
-        // the single write path. a client calls this to claim a role; the server stamps it against the
-        // caller's clientId. using RpcParams to read the sender server-side means a client can only set
-        // its own role, it can't spoof another client's. on change, re-spawn that player (approach B).
+        // the single write path. a client claims a role; the server stamps it against the caller's clientId
+        // (read from RpcParams server-side, so a client can only set its own role). on change, re-spawn (B).
         [Rpc(SendTo.Server)]
         public void SetRoleRpc(PlayerRole role, RpcParams rpcParams = default)
         {
             var clientId = rpcParams.Receive.SenderClientId;
             _roles[clientId] = role;
 
-            // approach B: re-teleport the already-spawned player to the new role's spawn point. debug
-            // re-spawn (not a round advance), so round 0 for appearance; the match flow re-rolls per round.
+            // approach B: re-teleport the live player to the new spawn. debug re-spawn (not a round advance),
+            // so round 0 for appearance; the match flow re-rolls per round.
             if (NetworkManager.ConnectedClients.TryGetValue(clientId, out var client)
                 && client.PlayerObject != null
                 && client.PlayerObject.TryGetComponent(out NetworkPlayerController controller))
@@ -72,20 +55,15 @@ namespace FriendSlop.Player
             }
         }
 
-        // server-only lookup used by OnNetworkSpawn. defaults to Sniper for an unregistered client so a
-        // player that spawns before picking still lands on a valid spot (approach B's step 1).
-        public PlayerRole GetRole(ulong clientId)
-        {
-            return _roles.TryGetValue(clientId, out var role) ? role : PlayerRole.Sniper;
-        }
+        // server-only lookup used by OnNetworkSpawn. defaults to Sniper for an unregistered client so a player
+        // that spawns before picking still lands somewhere valid.
+        public PlayerRole GetRole(ulong clientId) =>
+            _roles.TryGetValue(clientId, out var role) ? role : PlayerRole.Sniper;
 
-        // server-only. the match's role-assignment door (called by GameFlowManager each RoleAssign phase).
-        // fixed teams: membership (hunter vs criminal) is frozen once at the first assignment and never
-        // crosses. each round only rotates which hunter is the Witness; the rest of the hunters are
-        // Snipers, and criminals stay criminals. roundOffset picks the Witness so the spotter role cycles
-        // among the hunters across rounds.
-        //
-        // composition split unchanged: this owns "who plays what"; SetRoleRpc / RespawnForRole applies it.
+        // server-only. the match's role-assignment door (GameFlowManager calls it each RoleAssign). fixed
+        // teams: hunter-vs-criminal membership is frozen at the first assignment and never crosses; each round
+        // only rotates which hunter is the Witness (roundOffset picks it). this owns "who plays what";
+        // SetRoleRpc / RespawnForRole applies it.
         public void AssignRolesForRound(IReadOnlyList<ulong> clients, int roundOffset)
         {
             if (clients.Count == 0)
@@ -95,18 +73,17 @@ namespace FriendSlop.Player
             if (_hunters.Count == 0 && _criminals.Count == 0)
                 BuildTeams(clients);
 
-            // rotate the Witness within the hunter team; every other hunter is a Sniper
+            // rotate the Witness within the hunter team; every other hunter is a Sniper.
             int witnessIdx = _hunters.Count > 0 ? roundOffset % _hunters.Count : 0;
             for (int i = 0; i < _hunters.Count; i++)
                 ApplyRole(_hunters[i], i == witnessIdx ? PlayerRole.Witness : PlayerRole.Sniper, roundOffset);
 
-            // criminals keep their team, but re-roll their look for the new round (pass the round)
+            // criminals keep their team but re-roll their look for the new round.
             foreach (var c in _criminals)
                 ApplyRole(c, PlayerRole.Criminal, roundOffset);
         }
 
-        // minimal one-time split: order by id, first (1 + (N-1)/2) become hunters, the rest criminals.
-        // (same size rule as before, but frozen as fixed teams instead of re-rolled each round.)
+        // one-time split: order by id, first (1 + (N-1)/2) become hunters, the rest criminals.
         private void BuildTeams(IReadOnlyList<ulong> clients)
         {
             var ordered = new List<ulong>(clients);
@@ -128,11 +105,10 @@ namespace FriendSlop.Player
             _criminals.Clear();
         }
 
-        // is this client on the hunter team this match? (read after teams are built)
+        // is this client on the hunter team this match? (read after teams are built.)
         public bool IsHunterTeam(ulong clientId) => _hunters.Contains(clientId);
 
-        // record the role and apply it through the same door SetRoleRpc uses (re-teleport the live player).
-        // round threads through to appearance so each round re-rolls a fresh look.
+        // record the role and apply it through the same door SetRoleRpc uses; round threads to appearance.
         private void ApplyRole(ulong clientId, PlayerRole role, int round)
         {
             _roles[clientId] = role;

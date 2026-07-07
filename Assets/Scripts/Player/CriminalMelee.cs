@@ -5,56 +5,43 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // the criminal's melee: left-click near a crowd NPC to punch it down. server-authoritative and modelled
-    // exactly like NetworkShooter: the owner reads input and asks, the server decides, and the
-    // result is replicated by the NPC's stream index so every machine drops the same pedestrian locally (the
-    // deterministic crowd has no per-NPC networking; we replicate the reactive event, not the NPC).
+    // the criminal's melee: left-click near a crowd NPC to punch it down and steal a garment. modelled like
+    // NetworkShooter: the owner reads input and asks, the server decides, and the result is replicated by the
+    // NPC's stream index so every machine drops the same pedestrian locally (the deterministic crowd has no
+    // per-NPC networking; we replicate the reactive event, not the NPC).
     //
-    // reach is a real trigger collider (see MeleeRangeTracker on a child), so it's visible and
-    // drag-to-resize in the editor instead of a runtime OverlapSphere. the tracker only maintains "who's in
-    // range"; this component owns the timing (punch contact frame) and the authority (server RPC).
-    //
-    // this first pass only downs the NPC (fall + lie for the round) and plays the criminal's punch. stealing
-    // the NPC's hat/outwear onto the criminal is a later step layered on the same RPC.
-    //
-    // gated to Criminal role + Hunt phase, re-checked on the server so a hacked client can't melee as a hunter
-    // or outside Hunt.
+    // reach is a real trigger collider (MeleeRangeTracker on a child), so it's drag-to-resize in the editor.
+    // the tracker maintains "who's in range"; this owns the timing (contact frame) and authority (server RPC).
+    // gated to Criminal + Hunt, re-checked on the server.
     public class CriminalMelee : RoleGatedAbility
     {
-        // the trigger volume that tracks NPCs in punch reach. a child with a trigger collider +
-        // MeleeRangeTracker. if unset, found in children at Awake.
         [SerializeField]
-        private MeleeRangeTracker rangeTracker;
+        private MeleeRangeTracker rangeTracker; // NPCs in reach; found in children if unset.
 
-        // half-angle of the melee cone (degrees). an NPC must be within this of straight ahead to be
-        // hit, so you punch what you face, not someone beside you who happens to be in the trigger.
+        // half-angle of the melee cone (deg): an NPC must be within this of straight ahead to be hit.
         [SerializeField]
         private float coneHalfAngle = 60f;
 
-        // seconds between punches
         [SerializeField]
         private float cooldown = 1f;
 
-        // how long the criminal is rooted in place while punching (seconds). match the punch clip
-        // length (~0.77s) so movement resumes right as the swing ends.
+        // seconds the criminal is rooted while punching. match the punch clip (~0.77s) so movement resumes as the swing ends.
         [SerializeField]
         private float rootDuration = 0.77f;
 
-        // this player's animator (on the Character child), fired for the punch on every copy
-        private Animator _animator;
+        private Animator _animator; // on the Character child, fired for the punch on every copy.
 
         private static readonly int PunchHash = Animator.StringToHash("Punch");
 
         protected override void Awake()
         {
-            base.Awake(); // caches Controller.
+            base.Awake();
             _animator = GetComponentInChildren<Animator>();
             if (rangeTracker == null)
                 rangeTracker = GetComponentInChildren<MeleeRangeTracker>();
         }
 
-        // only the Criminal melees. the alive/phase gate lives in RoleGatedAbility.CanUse; this only narrows
-        // which role.
+        // only the Criminal melees. the alive/phase gate lives in RoleGatedAbility.CanUse.
         protected override bool RolePredicate(PlayerRole role) => role == PlayerRole.Criminal;
 
         private void Update()
@@ -66,28 +53,21 @@ namespace FriendSlop.Player
             if (mouse == null || !mouse.leftButton.wasPressedThisFrame)
                 return;
 
-            if (!CanUse)
+            if (!CanUse || !TryConsumeCooldown(cooldown))
                 return;
 
-            if (!TryConsumeCooldown(cooldown))
-                return;
-
-            // start the swing now (feedback for trying). it plays locally on the owner immediately and is
-            // broadcast to everyone else. the actual hit is decided later, at the punch's contact frame, by
-            // an animation event (OnPunchContact), so the NPC only goes down when the fist is extended, not
-            // at the click.
+            // start the swing now (feedback), locally + broadcast. the hit is decided later at the contact
+            // frame by an animation event (OnPunchContact), so the NPC drops when the fist extends, not on click.
             if (_animator != null)
                 _animator.SetTrigger(PunchHash);
             PlaySwingServerRpc();
 
-            // root the criminal in place for the swing so they can't glide while punching. owner drives its own
-            // movement, so locking here (owner-side) is enough; the server simulates the same zero input.
+            // root the criminal for the swing so they can't glide while punching (owner drives its own movement).
             StopAllCoroutines();
             StartCoroutine(RootWhilePunching());
         }
 
-        // hold the owner still for the punch, then release. uses the controller's MovementLocked flag, which
-        // feeds zero move input through the same path as the cutscene/downed freeze.
+        // hold the owner still for the swing via MovementLocked (same zero-input path as the cutscene/downed freeze).
         private System.Collections.IEnumerator RootWhilePunching()
         {
             if (Controller != null)
@@ -97,10 +77,9 @@ namespace FriendSlop.Player
                 Controller.MovementLocked = false;
         }
 
-        // called by an animation event on the punch clip at the contact frame (fist fully extended). fires on
-        // every copy of the criminal, but only the owner turns it into an authoritative hit request, so the
-        // down lands at the moment of impact, and the server (not the client) still decides what was hit. we
-        // send the nearest in-range NPC's index; the server re-validates before downing it.
+        // fired by an animation event on the punch clip at the contact frame (fist extended). runs on every
+        // copy, but only the owner turns it into an authoritative hit request: it sends the nearest in-range
+        // NPC's index and the server re-validates before downing it.
         public void OnPunchContact()
         {
             if (!IsOwner || !CanUse || rangeTracker == null)
@@ -113,15 +92,14 @@ namespace FriendSlop.Player
                 SubmitHitServerRpc(target.Index);
         }
 
-        // safety: never leave the player rooted if the object goes away mid-swing (despawn/scene change)
+        // safety: never leave the player rooted if it despawns mid-swing.
         public override void OnNetworkDespawn()
         {
             if (Controller != null)
                 Controller.MovementLocked = false;
         }
 
-        // owner to server: broadcast the swing to the other copies so everyone sees the criminal punch. the
-        // owner already triggered its own animator locally (no need to round-trip its own swing).
+        // owner -> server: broadcast the swing to the other copies (the owner already triggered its own locally).
         [Rpc(SendTo.Server)]
         private void PlaySwingServerRpc()
         {
@@ -130,20 +108,18 @@ namespace FriendSlop.Player
             PunchOthersRpc();
         }
 
-        // owner to server, at the contact frame: the NPC index the owner's reach hit. server re-checks the gate
-        // and replicates the down to everyone. (trusting the owner's index for an ambient NPC is low-stakes,
-        // it only downs a pedestrian; the score-relevant player hits stay fully server-resolved elsewhere. the
-        // server still enforces role/phase so a non-criminal can't down NPCs.)
+        // owner -> server at the contact frame: the NPC index the reach hit. trusting the owner's index for an
+        // ambient NPC is low-stakes (it only downs a pedestrian; scored player hits stay server-resolved). the
+        // server still enforces role/phase.
         [Rpc(SendTo.Server)]
         private void SubmitHitServerRpc(int npcIndex)
         {
             if (!CanUse)
                 return;
 
-            // steal one garment from that NPC onto the criminal so they gradually blend in, one piece per
-            // punch (not the whole outfit), so a full disguise takes several NPCs and the sketch phase still
-            // matters. which piece is taken is seeded by the NPC index (same NPC gives the same piece everywhere).
-            // the NPC's look is regenerated from the crowd seed (pure function of index, zero storage).
+            // steal one garment from that NPC onto the criminal (one piece per punch, so a full disguise takes
+            // several NPCs and the sketch still matters). the piece is seeded by the NPC index (same NPC -> same
+            // piece everywhere), and the NPC's look is regenerated from the crowd seed (pure function of index).
             // capture which slot was stolen so the NPC can visibly lose that same piece.
             int stolenSlot = -1;
             if (CrowdManager.Instance != null
@@ -158,15 +134,13 @@ namespace FriendSlop.Player
             NpcDownedRpc(npcIndex, stolenSlot);
         }
 
-        // server to all machines: down NPC #index locally (fall + lie for the round) and strip the stolen slot
-        // (-1 = none) via the shared crowd index, so every machine drops the same pedestrian minus the same
-        // garment.
+        // server -> all: down NPC #index (fall + lie for the round) and strip the stolen slot (-1 = none) via
+        // the shared crowd index, so every machine drops the same pedestrian minus the same garment.
         [Rpc(SendTo.ClientsAndHost)]
         private void NpcDownedRpc(int index, int stolenSlot) => CrowdManager.Instance?.DownNpc(index, stolenSlot);
 
-        // server to all machines except the owner (it already triggered its own swing locally on click): play
-        // this criminal's punch on every other copy so all players see the swing. NotOwner keeps the owner
-        // from re-triggering mid-swing (which could restart/stutter its own animation).
+        // server -> all except the owner (it already triggered its own on click): play the swing on every other
+        // copy. NotOwner keeps the owner from re-triggering mid-swing and stuttering its animation.
         [Rpc(SendTo.NotOwner)]
         private void PunchOthersRpc()
         {

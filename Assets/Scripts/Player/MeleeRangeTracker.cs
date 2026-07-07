@@ -4,17 +4,13 @@ using UnityEngine;
 
 namespace FriendSlop.Player
 {
-    // a trigger volume that tracks which crowd NPCs are currently within the criminal's melee reach. lives on
-    // a child of the player with a Sphere/Capsule collider set to Is Trigger, so the reach is a real,
-    // editor-visible, drag-to-resize collider instead of a runtime OverlapSphere.
-    //
-    // it only maintains the in-range set (enter/exit); it never decides a hit. at the punch's contact frame
-    // CriminalMelee asks for the nearest in-range NPC and runs the authoritative server hit, so
-    // timing (contact frame) and authority (server) stay exactly where they were.
+    // a trigger volume tracking which crowd NPCs are within the criminal's melee reach. lives on a child with
+    // a trigger collider, so the reach is a real editor-visible, drag-to-resize collider instead of a runtime
+    // OverlapSphere. it only maintains the in-range set (enter/exit); it never decides a hit. at the punch's
+    // contact frame CriminalMelee asks for the nearest in-range NPC and runs the authoritative server hit.
     public class MeleeRangeTracker : MonoBehaviour
     {
-        // NPCs whose hitbox is currently overlapping the trigger. a set (not a list) so duplicate bone
-        // colliders of the same NPC don't add it twice, and exit cleanly removes it.
+        // NPCs whose hitbox overlaps the trigger. a set so duplicate bone colliders of one NPC don't double it.
         private readonly HashSet<Npc> _inRange = new();
 
         private void OnTriggerEnter(Collider other)
@@ -31,16 +27,14 @@ namespace FriendSlop.Player
                 _inRange.Remove(hitbox.Npc);
         }
 
-        // the nearest live (not downed) NPC currently in reach that is also within coneHalfAngle
-        // degrees of forward from origin, so you punch what you face, not
-        // someone beside you. prunes any destroyed/despawned NPCs it encounters. null if nothing qualifies.
+        // nearest live NPC in reach that's also within `coneHalfAngle` of `forward` from `origin`, so you punch
+        // what you face, not who's beside you. prunes destroyed NPCs. null if nothing qualifies.
         public Npc GetBestTarget(Vector3 origin, Vector3 forward, float coneHalfAngle)
         {
             float cosLimit = Mathf.Cos(coneHalfAngle * Mathf.Deg2Rad);
             Npc best = null;
             float bestDist = float.MaxValue;
 
-            // iterate a snapshot so we can remove stale entries while scanning
             _inRange.RemoveWhere(n => n == null);
             foreach (var npc in _inRange)
             {
@@ -54,7 +48,7 @@ namespace FriendSlop.Player
                     continue;
 
                 if (Vector3.Dot(forward.normalized, to / dist) < cosLimit)
-                    continue;
+                    continue; // outside the cone.
 
                 if (dist < bestDist)
                 {

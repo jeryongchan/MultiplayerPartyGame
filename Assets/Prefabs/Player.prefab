@@ -4860,15 +4860,13 @@ GameObject:
   - component: {fileID: 7401428338358960647}
   - component: {fileID: 1069966132034548798}
   - component: {fileID: 8579882744500487552}
-  - component: {fileID: 4441211071126545624}
-  - component: {fileID: 8988902718902022807}
-  - component: {fileID: 4149970273544382131}
   - component: {fileID: 6678650672768488292}
-  - component: {fileID: 7535546521193008335}
   - component: {fileID: 8600231418081796205}
   - component: {fileID: 6762774773118287858}
   - component: {fileID: 6725415357126542444}
   - component: {fileID: 868169867567880755}
+  - component: {fileID: 9146944114831867516}
+  - component: {fileID: 5567916639568973255}
   m_Layer: 6
   m_Name: Player
   m_TagString: Untagged
@@ -5006,48 +5004,6 @@ MonoBehaviour:
   ShowTopMostFoldoutHeaderGroup: 1
   builder: {fileID: 6678650672768488292}
   historySeconds: 0.5
---- !u!114 &4441211071126545624
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8074584989678431320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d94841de4bb6a6a4082ec607e0a00785, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.AutoStrafe
-  ShowTopMostFoldoutHeaderGroup: 1
-  halfPeriod: 0.8
-  toggleKey: 21
---- !u!114 &8988902718902022807
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8074584989678431320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f73738e608b22694fac04417b47bf353, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.RolePickerDebug
-  ShowTopMostFoldoutHeaderGroup: 1
---- !u!114 &4149970273544382131
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8074584989678431320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 86ec8b0edf1d12645bcbff082482c4b2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.ScopedSelfHider
-  ShowTopMostFoldoutHeaderGroup: 1
-  visualRoot: {fileID: 4868148605327696447}
 --- !u!114 &6678650672768488292
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5133,20 +5089,6 @@ MonoBehaviour:
     offset: {x: 0, y: 0.082, z: 0}
     axis: 1
     zone: 0
---- !u!114 &7535546521193008335
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 8074584989678431320}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a3f727f062c0d4e4f97a011f2a782ca1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.RoleHeldItem
-  ShowTopMostFoldoutHeaderGroup: 1
-  item: {fileID: 2347388012280484522}
 --- !u!114 &8600231418081796205
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5207,6 +5149,36 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8742ecc8c29ea7f44ae3c517c8d640db, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerInputReader
+--- !u!114 &9146944114831867516
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 50929dc73592059488d879f06cb0dcf7, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.SniperWeaponVisuals
+  ShowTopMostFoldoutHeaderGroup: 1
+  item: {fileID: 2347388012280484522}
+  visualRoot: {fileID: 4868148605327696447}
+--- !u!114 &5567916639568973255
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8074584989678431320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 22012ebef2995b14ca4da9bdd96666e6, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerDebugTools
+  ShowTopMostFoldoutHeaderGroup: 1
+  halfPeriod: 0.8
+  strafeToggleKey: 21
 --- !u!1 &8341231475677589786
 GameObject:
   m_ObjectHideFlags: 0
