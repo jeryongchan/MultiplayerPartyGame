@@ -72,6 +72,21 @@ namespace FriendSlop.Player
         public readonly NetworkVariable<PlayerRole> Role =
             new NetworkVariable<PlayerRole>(writePerm: NetworkVariableWritePermission.Server);
 
+        // this machine's local player controller, or null if we have no player object yet (still connecting,
+        // in the lobby, or spectating). resolved live through NetworkManager.LocalClient every call, it's
+        // per-machine, not a scene singleton, so it must not be cached. local UI (the sketch gate, crime-scene
+        // view) reads it to gate on the local player's role without re-walking the LocalClient chain themselves.
+        public static NetworkPlayerController Local
+        {
+            get
+            {
+                var nm = NetworkManager.Singleton;
+                if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
+                    return null;
+                return nm.LocalClient.PlayerObject.TryGetComponent(out NetworkPlayerController c) ? c : null;
+            }
+        }
+
         // owner-side ring buffers, indexed by tick % BufferSize.
         private readonly InputPayload[] _inputBuffer = new InputPayload[BufferSize];
         private readonly StatePayload[] _stateBuffer = new StatePayload[BufferSize];

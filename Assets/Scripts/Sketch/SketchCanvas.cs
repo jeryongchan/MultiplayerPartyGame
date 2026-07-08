@@ -32,6 +32,13 @@ namespace FriendSlop.Sketch
         [SerializeField]
         private int brushRadius = 4;
 
+        // colour subsequent strokes paint in. set by the palette when the witness picks a swatch.
+        public Color BrushColor
+        {
+            get => brushColor;
+            set => brushColor = value;
+        }
+
         private RawImage _image;
         private RectTransform _rect;
         private Texture2D _texture;

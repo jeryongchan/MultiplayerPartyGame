@@ -1,3 +1,4 @@
+using FriendSlop.Game;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -106,12 +107,19 @@ namespace FriendSlop.Player
             // cursor lock is driven per-frame in UpdateCursorLock, so it can free for the HUD/menus and re-lock in play.
         }
 
-        // cursor locked by default (so mouse-look works), freed only while Left Alt is held: the escape hatch
-        // for clicking the debug HUD without the lock swallowing the click. look works in every phase.
+        // cursor locked by default (so mouse-look works), freed while Left Alt is held (escape hatch for
+        // clicking the debug HUD) or while the local witness is drawing during the Sketch phase (they need the
+        // cursor to draw/pick colours, the camera is parked at the crime scene then, so there's no mouse-look
+        // to disrupt). gated to the witness so idle snipers/criminals keep a locked cursor during Sketch.
         private void UpdateCursorLock()
         {
             var kb = UnityEngine.InputSystem.Keyboard.current;
-            bool wantFree = kb != null && kb.leftAltKey.isPressed;
+            bool altHeld = kb != null && kb.leftAltKey.isPressed;
+            bool witnessSketching =
+                GameFlowManager.Instance != null
+                && GameFlowManager.Instance.CurrentPhase.Value == GamePhase.Sketch
+                && NetworkPlayerController.Local?.Role.Value == PlayerRole.Witness;
+            bool wantFree = altHeld || witnessSketching;
 
             Cursor.lockState = wantFree ? CursorLockMode.None : CursorLockMode.Locked;
             Cursor.visible = wantFree;

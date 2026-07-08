@@ -1,6 +1,5 @@
 using FriendSlop.Game;
 using FriendSlop.Player;
-using Unity.Netcode;
 using UnityEngine;
 
 namespace FriendSlop.Sketch
@@ -68,9 +67,13 @@ namespace FriendSlop.Sketch
             // gate and the canvas is about to be hidden below). done from the gate, not the canvas,
             // because the canvas GameObject gets SetActive(false) in Refresh() and a disabled component
             // wouldn't receive the phase event itself. leaving Sketch means entering SketchReveal.
+            // GetComponentInChildren (not TryGetComponent): the canvas may be a child of content (content is
+            // a wrapper holding the canvas + palette), not content itself. includes inactive so it still
+            // resolves if a parent toggled off this frame.
             if (witnessOnly && newPhase == GamePhase.SketchReveal && content != null && content.activeSelf)
             {
-                if (content.TryGetComponent(out SketchCanvas canvas))
+                var canvas = content.GetComponentInChildren<SketchCanvas>(includeInactive: true);
+                if (canvas != null)
                     canvas.Submit();
             }
 
@@ -88,14 +91,11 @@ namespace FriendSlop.Sketch
         {
             if (!witnessOnly || _watchedController != null)
                 return;
-            var nm = NetworkManager.Singleton;
-            if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
+            var local = NetworkPlayerController.Local;
+            if (local == null)
                 return;
-            if (nm.LocalClient.PlayerObject.TryGetComponent(out NetworkPlayerController c))
-            {
-                _watchedController = c;
-                _watchedController.Role.OnValueChanged += OnRoleChanged;
-            }
+            _watchedController = local;
+            _watchedController.Role.OnValueChanged += OnRoleChanged;
         }
 
         private void OnRoleChanged(PlayerRole _, PlayerRole __) => Refresh();
@@ -108,20 +108,10 @@ namespace FriendSlop.Sketch
             bool phaseOk = GameFlowManager.Instance != null
                 && System.Array.IndexOf(activeDuring, GameFlowManager.Instance.CurrentPhase.Value) >= 0;
 
-            bool roleOk = !witnessOnly || LocalPlayerIsWitness();
+            bool roleOk = !witnessOnly
+                || NetworkPlayerController.Local?.Role.Value == PlayerRole.Witness;
 
             content.SetActive(phaseOk && roleOk);
-        }
-
-        // the local player's replicated role. on each machine the owner's player object carries the Role
-        // NetworkVariable the server assigned; we read it to decide if this client should see the canvas.
-        private static bool LocalPlayerIsWitness()
-        {
-            var nm = NetworkManager.Singleton;
-            if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
-                return false;
-            return nm.LocalClient.PlayerObject.TryGetComponent(out NetworkPlayerController controller)
-                && controller.Role.Value == PlayerRole.Witness;
         }
     }
 }

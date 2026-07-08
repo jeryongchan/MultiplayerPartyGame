@@ -12,7 +12,9 @@ namespace FriendSlop.Player
     //
     // reach is a real trigger collider (MeleeRangeTracker on a child), so it's drag-to-resize in the editor.
     // the tracker maintains "who's in range"; this owns the timing (contact frame) and authority (server RPC).
-    // gated to Criminal + Hunt, re-checked on the server.
+    // gated to Criminal + Hunt, re-checked on the server. target resolution is server-authoritative: the owner
+    // sends where it punched, the server picks which NPC that reaches from its own copy of the deterministic
+    // crowd (no rewind needed, every machine agrees on NPC positions).
     public class CriminalMelee : RoleGatedAbility
     {
         [SerializeField]
@@ -78,18 +80,15 @@ namespace FriendSlop.Player
         }
 
         // fired by an animation event on the punch clip at the contact frame (fist extended). runs on every
-        // copy, but only the owner turns it into an authoritative hit request: it sends the nearest in-range
-        // NPC's index and the server re-validates before downing it.
+        // copy, but only the owner turns it into an authoritative hit request. mirrors SniperShooter: the owner
+        // sends where it punched from (position + facing); the server decides which NPC that reaches. it does not
+        // resolve the NPC itself and send an index, that would let a client claim any pedestrian.
         public void OnPunchContact()
         {
-            if (!IsOwner || !CanUse || rangeTracker == null)
+            if (!IsOwner || !CanUse)
                 return;
 
-            // pick the target on the owner from its own trigger + facing (the owner is the one whose reach the
-            // punch represents). send the index; the server re-checks role/phase and downs it for everyone.
-            Npc target = rangeTracker.GetBestTarget(transform.position, transform.forward, coneHalfAngle);
-            if (target != null)
-                SubmitHitServerRpc(target.Index);
+            SubmitHitServerRpc(transform.position, transform.forward);
         }
 
         // safety: never leave the player rooted if it despawns mid-swing.
@@ -108,14 +107,24 @@ namespace FriendSlop.Player
             PunchOthersRpc();
         }
 
-        // owner -> server at the contact frame: the NPC index the reach hit. trusting the owner's index for an
-        // ambient NPC is low-stakes (it only downs a pedestrian; scored player hits stay server-resolved). the
-        // server still enforces role/phase.
+        // owner -> server at the contact frame: where the criminal punched from (origin + facing). the server
+        // re-runs the reach/cone test against its own copy of the deterministic crowd, the same present-world
+        // resolution the sniper does against NPCs (no rewind needed, every machine agrees on NPC positions).
+        // the client never names the NPC, so it can't claim a pedestrian it isn't actually facing/reaching.
         [Rpc(SendTo.Server)]
-        private void SubmitHitServerRpc(int npcIndex)
+        private void SubmitHitServerRpc(Vector3 origin, Vector3 forward)
         {
-            if (!CanUse)
+            if (!CanUse || rangeTracker == null)
                 return;
+
+            // server-authoritative target pick: the nearest live NPC the trigger reach holds that's inside the
+            // cone from where the criminal punched. the trigger exists on the server's copy too, so its in-range
+            // set is valid here.
+            Npc target = rangeTracker.GetBestTarget(origin, forward, coneHalfAngle);
+            if (target == null)
+                return;
+
+            int npcIndex = target.Index;
 
             // steal one garment from that NPC onto the criminal (one piece per punch, so a full disguise takes
             // several NPCs and the sketch still matters). the piece is seeded by the NPC index (same NPC -> same

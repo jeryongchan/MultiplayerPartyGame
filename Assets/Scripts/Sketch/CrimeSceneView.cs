@@ -65,7 +65,8 @@ namespace FriendSlop.Sketch
 
         private void Apply(GamePhase phase)
         {
-            bool sketching = phase == GamePhase.Sketch && LocalPlayerIsWitness();
+            bool sketching = phase == GamePhase.Sketch
+                && NetworkPlayerController.Local?.Role.Value == PlayerRole.Witness;
 
             if (sketching && !_built)
             {
@@ -139,15 +140,6 @@ namespace FriendSlop.Sketch
                     Destroy(f);
             _figures.Clear();
             _built = false;
-        }
-
-        private static bool LocalPlayerIsWitness()
-        {
-            var nm = NetworkManager.Singleton;
-            if (nm == null || nm.LocalClient == null || nm.LocalClient.PlayerObject == null)
-                return false;
-            return nm.LocalClient.PlayerObject.TryGetComponent(out NetworkPlayerController controller)
-                && controller.Role.Value == PlayerRole.Witness;
         }
     }
 }
