@@ -19,15 +19,15 @@ namespace FriendSlop.Crowd
     // joiner that starts sampling mid-drive lands on the exact same spot as everyone else.
     public class Bus : MonoBehaviour, IStreamItem
     {
-        // lane geometry, injected by the manager at spawn. world space; the bus drives start -> end.
-        private Vector3 _start;
-        private Vector3 _end;
-        private Vector3 _dir;      // normalized start->end
-        private float _laneLength; // |end - start|
+        // lane geometry, injected by the manager at spawn. world space; the bus drives waypoints[0] -> [^1]
+        // along straight segments, turning to face the new segment at each intermediate waypoint.
+        private Vector3[] _waypoints;
+        private float[] _cumulativeDist; // arc-distance from waypoints[0] to waypoints[i]
+        private float _laneLength;       // total polyline length (= _cumulativeDist[^1])
 
-        // vertical lift so the bus rests on the lane line instead of straddling it: the lane is authored at
-        // ground height (Y=0), but the prefab's pivot is at its center, so we raise every position by half the
-        // bus's world height. computed from the renderer bounds, so it auto-adapts to any prefab scale.
+        // vertical lift so the bus rests on the lane line instead of sinking/floating: the lane is authored at
+        // ground height (Y=0), but a prefab's pivot may sit anywhere (center, base, etc). computed from how far
+        // the renderer's true bottom is below the pivot, so it adapts to any prefab regardless of pivot placement.
         private Vector3 _groundOffset;
 
         private double _birthTime; // shared-clock time this bus entered the lane
@@ -52,17 +52,18 @@ namespace FriendSlop.Crowd
         // configure this bus for its one drive. called locally on every machine right after Instantiate with
         // values the manager derived deterministically from (seed, index), so every machine builds the same
         // bus. stopDist is ignored when stops is false.
-        public void Initialize(Vector3 start, Vector3 end, double birthTime, bool stops, float stopDist,
+        public void Initialize(Vector3[] waypoints, double birthTime, bool stops, float stopDist,
             float stopDuration, float cruiseSpeed, float accelTime)
         {
-            _start = start;
-            _end = end;
-            _dir = (end - start).normalized;
-            _laneLength = Vector3.Distance(start, end);
+            _waypoints = waypoints;
+            _cumulativeDist = new float[waypoints.Length];
+            for (int i = 1; i < waypoints.Length; i++)
+                _cumulativeDist[i] = _cumulativeDist[i - 1] + Vector3.Distance(waypoints[i - 1], waypoints[i]);
+            _laneLength = _cumulativeDist[^1];
 
-            // lift by half the bus's world height so its bottom sits at the lane's height (pivot is centered)
+            // lift so the renderer's bottom lands at the lane's height, however far that is below the pivot
             var rend = GetComponentInChildren<Renderer>();
-            _groundOffset = rend != null ? Vector3.up * rend.bounds.extents.y : Vector3.zero;
+            _groundOffset = rend != null ? Vector3.up * (transform.position.y - rend.bounds.min.y) : Vector3.zero;
 
             _birthTime = birthTime;
             _cruiseSpeed = Mathf.Max(0.01f, cruiseSpeed);
@@ -110,9 +111,30 @@ namespace FriendSlop.Crowd
             }
 
             float dist = DistanceAt(t);
-            transform.position = _start + _dir * dist + _groundOffset;
-            if (_dir.sqrMagnitude > 1e-6f)
-                transform.rotation = Quaternion.LookRotation(_dir, Vector3.up);
+            (Vector3 pos, Vector3 dir) = PointAlongPath(dist);
+            transform.position = pos + _groundOffset;
+            if (dir.sqrMagnitude > 1e-6f)
+                transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+        }
+
+        // walks the waypoint polyline to the point `dist` along it (clamped to the path's ends), returning that
+        // point plus the direction of the segment it falls on (for facing). corners are sharp: the bus's facing
+        // snaps to the new segment's direction as soon as it passes the waypoint.
+        private (Vector3 pos, Vector3 dir) PointAlongPath(float dist)
+        {
+            dist = Mathf.Clamp(dist, 0f, _laneLength);
+            for (int i = 1; i < _waypoints.Length; i++)
+            {
+                if (dist > _cumulativeDist[i] && i != _waypoints.Length - 1)
+                    continue;
+
+                float segStart = _cumulativeDist[i - 1];
+                float segLength = _cumulativeDist[i] - segStart;
+                Vector3 dir = segLength > 1e-6f ? (_waypoints[i] - _waypoints[i - 1]) / segLength : Vector3.zero;
+                float into = dist - segStart;
+                return (_waypoints[i - 1] + dir * into, dir);
+            }
+            return (_waypoints[0], Vector3.zero);
         }
 
         // arc-distance along the lane at elapsed time t, integrating the approach->stop->depart profile

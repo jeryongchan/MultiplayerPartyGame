@@ -16,11 +16,10 @@ namespace FriendSlop.Crowd
         [System.Serializable]
         public class Lane
         {
-            // where buses enter this lane
-            public Transform start;
-
-            // where buses exit this lane. buses drive start -> end.
-            public Transform end;
+            // ordered path this lane's buses drive, start to end (index 0 -> last). straight segments between
+            // consecutive points, so corners (e.g. around a block) just need an extra waypoint at the turn.
+            // needs at least 2.
+            public Transform[] waypoints;
 
             // possible stop points along the lane. each stopping bus picks one (seeded). leave empty
             // for a lane whose buses never stop (drive straight through).
@@ -81,11 +80,51 @@ namespace FriendSlop.Crowd
         protected override bool IsStillAlive(int stream, int index, double birth, double now)
         {
             var l = lanes[stream];
-            if (l.start == null || l.end == null)
+            if (!HasValidPath(l, out float length))
                 return false;
-            float length = Vector3.Distance(l.start.position, l.end.position);
             double maxLifetime = length / Mathf.Max(0.01f, cruiseSpeed) + stopDuration + accelTime * 2f;
             return now - birth < maxLifetime;
+        }
+
+        // a usable lane needs at least 2 waypoints, all assigned. also returns the total polyline length.
+        private static bool HasValidPath(Lane l, out float length)
+        {
+            length = 0f;
+            if (l.waypoints == null || l.waypoints.Length < 2)
+                return false;
+            for (int i = 0; i < l.waypoints.Length; i++)
+            {
+                if (l.waypoints[i] == null)
+                    return false;
+            }
+            for (int i = 1; i < l.waypoints.Length; i++)
+                length += Vector3.Distance(l.waypoints[i - 1].position, l.waypoints[i].position);
+            return true;
+        }
+
+        // arc-distance along the polyline (from waypoints[0]) of the point on the path nearest to `marker`.
+        // used to place a stop at the waypoint closest to it, projected onto the path the bus actually drives.
+        private static float ArcDistanceOf(Transform[] waypoints, Vector3 marker)
+        {
+            float best = float.MaxValue;
+            float bestArc = 0f;
+            float arc = 0f;
+            for (int i = 1; i < waypoints.Length; i++)
+            {
+                Vector3 a = waypoints[i - 1].position;
+                Vector3 b = waypoints[i].position;
+                float segLength = Vector3.Distance(a, b);
+                Vector3 segDir = segLength > 1e-6f ? (b - a) / segLength : Vector3.zero;
+                float proj = Mathf.Clamp(Vector3.Dot(marker - a, segDir), 0f, segLength);
+                float dist = Vector3.Distance(marker, a + segDir * proj);
+                if (dist < best)
+                {
+                    best = dist;
+                    bestArc = arc + proj;
+                }
+                arc += segLength;
+            }
+            return bestArc;
         }
 
         // instantiate bus #index in a lane locally, with its seed-derived stop behaviour and clock-derived birth
@@ -94,12 +133,11 @@ namespace FriendSlop.Crowd
         protected override IStreamItem SpawnItem(int stream, int index, double birth)
         {
             var l = lanes[stream];
-            if (l.start == null || l.end == null)
+            if (!HasValidPath(l, out float laneLength))
                 return null;
 
             var rng = RngFor(stream, index);
 
-            float laneLength = Vector3.Distance(l.start.position, l.end.position);
             bool hasStops = l.stops != null && l.stops.Length > 0;
             bool stops = hasStops && rng.NextDouble() < stopChance;
 
@@ -112,9 +150,13 @@ namespace FriendSlop.Crowd
                 int pick = cycleStops ? index % l.stops.Length : rng.Next(l.stops.Length);
                 Transform marker = l.stops[pick];
                 stopDist = marker != null
-                    ? Vector3.Dot(marker.position - l.start.position, (l.end.position - l.start.position).normalized)
+                    ? ArcDistanceOf(l.waypoints, marker.position)
                     : laneLength * 0.5f;
             }
+
+            Vector3[] path = new Vector3[l.waypoints.Length];
+            for (int i = 0; i < path.Length; i++)
+                path[i] = l.waypoints[i].position;
 
             GameObject go = Instantiate(busPrefab);
             go.name = $"Bus_L{stream}_{index}";
@@ -122,8 +164,7 @@ namespace FriendSlop.Crowd
             var bus = go.GetComponent<Bus>();
             if (bus == null)
                 bus = go.AddComponent<Bus>();
-            bus.Initialize(l.start.position, l.end.position, birth, stops, stopDist, stopDuration,
-                cruiseSpeed, accelTime);
+            bus.Initialize(path, birth, stops, stopDist, stopDuration, cruiseSpeed, accelTime);
 
             return bus;
         }
