@@ -217,7 +217,8 @@ namespace FriendSlop.Player
             Quaternion rotation = Quaternion.Euler(_pitch + _recoilPitch, _yaw + _recoilYaw, 0f);
             _recoilPitch = Mathf.MoveTowards(_recoilPitch, 0f, recoilRecoverSpeed * Time.deltaTime);
             _recoilYaw = Mathf.MoveTowards(_recoilYaw, 0f, recoilRecoverSpeed * Time.deltaTime);
-            Vector3 focus = _eye != null ? _eye.position : target.position + targetOffset;
+            // offset lifts the hip view, fades out when scoped
+            Vector3 focus = (_eye != null ? _eye.position : target.position) + targetOffset * (1f - _scopeBlend);
             transform.position = focus - rotation * Vector3.forward * currentDistance;
             transform.rotation = rotation;
         }
