@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 0f09c1a871e24dcdaf0950646f596032
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 377470
+  packageName: 'PixelDrift: Metro Free - 3D Pixel Art Subway for Boomer FPS VR'
+  packageVersion: 1.0
+  assetPath: Assets/EmaceArt/PixelDrift Metro Free/Scripts/FPP_PlayerController/FPP_PlayerController.cs
+  uploadId: 912858
