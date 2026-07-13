@@ -4979,7 +4979,7 @@ MonoBehaviour:
   maxRange: 200
   shootableMask:
     serializedVersion: 2
-    m_Bits: 4294967227
+    m_Bits: 4294966459
   requireScopeToFire: 1
   fireCooldown: 0
   recoilPitch: 2.5
@@ -5122,6 +5122,7 @@ MonoBehaviour:
   visual: {fileID: 4868148605327696447}
   hitCollider: {fileID: 0}
   bodyHitsToKill: 3
+  invulnerable: 0
 --- !u!114 &6725415357126542444
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -5177,7 +5178,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FriendSlop.Player.PlayerDebugTools
   ShowTopMostFoldoutHeaderGroup: 1
-  halfPeriod: 0.8
+  halfPeriod: 0.4
   strafeToggleKey: 21
 --- !u!1 &8341231475677589786
 GameObject:

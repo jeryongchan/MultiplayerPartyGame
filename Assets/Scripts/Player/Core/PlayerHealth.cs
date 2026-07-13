@@ -17,6 +17,9 @@ namespace FriendSlop.Player
         [SerializeField]
         private int bodyHitsToKill = 3; // body hits to down; a head hit is always an instant kill.
 
+        [SerializeField]
+        private bool invulnerable; // demo only: ignore every hit so a target keeps moving. server-only.
+
         private int _hp; // remaining body hits, server-only (clients only need the IsAlive flip). refilled on spawn/respawn.
 
         // alive/down state for the round. server-write, read everywhere. a downed criminal hides its mesh +
@@ -40,7 +43,7 @@ namespace FriendSlop.Player
         // the killing blow (so the caller scores the kill once). no-ops if already down.
         public bool TakeHit(HitZone zone)
         {
-            if (!IsServer || !IsAlive.Value)
+            if (!IsServer || !IsAlive.Value || invulnerable)
                 return false;
 
             if (zone == HitZone.Head)
